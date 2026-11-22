@@ -23,7 +23,7 @@ dotnet publish src/Inlay.Web -c Release
 
 The published files are written to `src/Inlay.Web/bin/Release/net11.0/publish/wwwroot`. They can be hosted as static files, including on GitHub Pages. The deployment must preserve the app's repository subpath and publish this directory; no server-side .NET hosting is required.
 
-This is an initial technical proof of concept, not yet the finished crop editor. It currently supports one image at a time and only offers automatic extraction when the detector returns its `Extracted` status.
+The browser app currently supports one image at a time, automatic candidate detection, editable crop coordinates, corner-radius adjustment, a live PNG preview, and local download. Detection is still experimental; when it cannot find a candidate, you can define the crop manually using source-image pixel coordinates.
 
 ## Requirements
 
