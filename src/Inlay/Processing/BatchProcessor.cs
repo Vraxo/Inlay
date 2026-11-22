@@ -17,6 +17,14 @@ public sealed class BatchProcessor
     private readonly ImageDetector detector = new();
     private readonly ImageExtractor extractor = new();
 
+    private static bool IsWithinDirectory(string path, string directory)
+    {
+        var relative = Path.GetRelativePath(directory, Path.GetFullPath(path));
+        return relative == "." || (relative != ".." &&
+            !relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
+            !Path.IsPathRooted(relative));
+    }
+
     public async Task<BatchSummary> RunAsync(RunOptions options)
     {
         var input = Path.GetFullPath(options.Input);
@@ -24,17 +32,22 @@ public sealed class BatchProcessor
             throw new FileNotFoundException($"Input path does not exist: {input}");
 
         var isDirectory = Directory.Exists(input);
-        var files = isDirectory
-            ? (options.Recursive ? Directory.EnumerateFiles(input, "*", SearchOption.AllDirectories) : Directory.EnumerateFiles(input))
-                .Where(path => SupportedExtensions.Contains(Path.GetExtension(path))).OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray()
-            : new[] { input };
-
-        if (files.Length == 0)
-            throw new InvalidOperationException("No supported image files were found.");
+        if (!isDirectory && !SupportedExtensions.Contains(Path.GetExtension(input)))
+            throw new InvalidOperationException("Input must be a PNG, JPEG, or WebP image.");
 
         var outputRoot = options.Output is null
             ? isDirectory ? Path.Combine(input, "inlay") : Path.GetDirectoryName(input)!
             : Path.GetFullPath(options.Output);
+
+        var files = isDirectory
+            ? (options.Recursive ? Directory.EnumerateFiles(input, "*", SearchOption.AllDirectories) : Directory.EnumerateFiles(input))
+                .Where(path => SupportedExtensions.Contains(Path.GetExtension(path)))
+                .Where(path => !IsWithinDirectory(path, outputRoot))
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray()
+            : new[] { input };
+
+        if (files.Length == 0)
+            throw new InvalidOperationException("No supported image files were found.");
 
         var counts = new int[5];
         foreach (var file in files)
