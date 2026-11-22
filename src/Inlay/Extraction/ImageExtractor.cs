@@ -39,8 +39,10 @@ public sealed class ImageExtractor
         }
         else
         {
-            Cv2.Rectangle(mask, new Point(scaledRadius, 0), new Point(scaledWidth - scaledRadius - 1, scaledHeight - 1), Scalar.White, -1);
-            Cv2.Rectangle(mask, new Point(0, scaledRadius), new Point(scaledWidth - 1, scaledHeight - scaledRadius - 1), Scalar.White, -1);
+            if (scaledRadius * 2 < scaledWidth)
+                Cv2.Rectangle(mask, new Point(scaledRadius, 0), new Point(scaledWidth - scaledRadius - 1, scaledHeight - 1), Scalar.White, -1);
+            if (scaledRadius * 2 < scaledHeight)
+                Cv2.Rectangle(mask, new Point(0, scaledRadius), new Point(scaledWidth - 1, scaledHeight - scaledRadius - 1), Scalar.White, -1);
             Cv2.Circle(mask, new Point(scaledRadius, scaledRadius), scaledRadius, Scalar.White, -1);
             Cv2.Circle(mask, new Point(scaledWidth - scaledRadius - 1, scaledRadius), scaledRadius, Scalar.White, -1);
             Cv2.Circle(mask, new Point(scaledRadius, scaledHeight - scaledRadius - 1), scaledRadius, Scalar.White, -1);
@@ -59,10 +61,10 @@ public sealed class ImageExtractor
         if (result.Best is not null)
         {
             var rect = result.Best.Bounds;
-            Cv2.Rectangle(preview, rect, result.Status == DetectionStatus.Extracted ? Scalar.LimeGreen : Scalar.Orange, 3);
+            Cv2.Rectangle(preview, rect, result.Status == DetectionStatus.Extracted ? new Scalar(50, 205, 50) : new Scalar(0, 165, 255), 3);
             Cv2.PutText(preview, $"{result.Status}  {result.Best.Confidence:P0}",
                 new Point(Math.Max(8, rect.X), Math.Max(28, rect.Y - 10)),
-                HersheyFonts.HersheySimplex, 0.8, Scalar.Yellow, 2);
+                HersheyFonts.HersheySimplex, 0.8, new Scalar(0, 255, 255), 2);
         }
         if (result.Second is not null)
             Cv2.Rectangle(preview, result.Second.Bounds, Scalar.Red, 2);
