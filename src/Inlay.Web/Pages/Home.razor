@@ -14,7 +14,7 @@
     <section class="intro">
         <p class="eyebrow">SCREENSHOT IMAGE EXTRACTOR</p>
         <h1>Keep the image.<br /><span>Lose the screenshot.</span></h1>
-        <p class="lede">Choose a screenshot. Inlay looks for the image inside it and prepares a clean PNG crop. Nothing is uploaded.</p>
+        <p class="lede">Choose a screenshot. Inlay finds the image inside it, then lets you fine-tune the crop before saving a clean PNG. Nothing is uploaded.</p>
     </section>
 
     <section class="workspace">
@@ -51,7 +51,7 @@
 
                 <div class="panel">
                     <div class="panel-heading">
-                        <span>02 / Detected image</span>
+                        <span>02 / Crop preview</span>
                         @if (detection is not null)
                         {
                             <span class="status @StatusClass">@detection.Status</span>
@@ -60,43 +60,52 @@
                     @if (!string.IsNullOrEmpty(cropPreview))
                     {
                         <div class="image-frame crop-frame">
-                            <img src="@cropPreview" alt="Extracted image preview" />
+                            <img src="@cropPreview" alt="Current crop preview" />
                         </div>
-                        @if (detection?.Best is not null)
-                        {
-                            <div class="image-meta">@detection.Best.Bounds.Width × @detection.Best.Bounds.Height px · @detection.Best.Confidence.ToString("P0") heuristic score</div>
-                        }
+                        <div class="image-meta">@cropWidth × @cropHeight px · PNG with transparent corners</div>
                     }
                     else
                     {
                         <div class="empty-preview">
                             <span>⌖</span>
-                            <strong>No crop to show</strong>
-                            <p>@(detection?.Reason ?? "Choose an image to begin.")</p>
+                            <strong>Set a crop rectangle</strong>
+                            <p>@(detection?.Reason ?? "Adjust the coordinates below, then apply your crop.")</p>
                         </div>
                     }
                 </div>
             </div>
 
-            @if (detection is not null)
-            {
-                <div class="result-footer">
-                    <p class="reason">@detection.Reason</p>
-                    @if (detection.Status == DetectionStatus.Extracted && !string.IsNullOrEmpty(cropPreview))
-                    {
-                        <button class="download" @onclick="DownloadCrop">Download PNG <span>↓</span></button>
-                    }
-                    else
-                    {
-                        <span class="review-note">Automatic extraction is withheld for this result.</span>
-                    }
+            <section class="crop-editor" aria-label="Crop adjustment">
+                <div class="editor-heading">
+                    <div>
+                        <p class="eyebrow">CROP EDITOR</p>
+                        <h2>Fine-tune your selection</h2>
+                    </div>
+                    <button class="subtle-button" @onclick="UseDetectionBounds" disabled="@(detection?.Best is null)">Reset to detection</button>
                 </div>
-            }
+                <p class="editor-help">Adjust the rectangle in source-image pixels. The crop must stay inside the original image.</p>
+                <div class="crop-fields">
+                    <label>X <input type="number" min="0" max="@Math.Max(0, sourceWidth - 1)" @bind="cropX" /></label>
+                    <label>Y <input type="number" min="0" max="@Math.Max(0, sourceHeight - 1)" @bind="cropY" /></label>
+                    <label>Width <input type="number" min="1" max="@sourceWidth" @bind="cropWidth" /></label>
+                    <label>Height <input type="number" min="1" max="@sourceHeight" @bind="cropHeight" /></label>
+                    <label>Corner radius <input type="number" min="0" max="@Math.Min(cropWidth, cropHeight) / 2" @bind="cornerRadius" /></label>
+                </div>
+                <div class="editor-actions">
+                    <span class="editor-validation">@validationMessage</span>
+                    <button class="apply" @onclick="ApplyCrop">Update preview <span>↗</span></button>
+                </div>
+            </section>
+
+            <div class="result-footer">
+                <p class="reason">@(detection?.Reason ?? "Manual crop — no automatic candidate was selected.")</p>
+                <button class="download" @onclick="DownloadCrop" disabled="@(cropBytes is null)">Download PNG <span>↓</span></button>
+            </div>
         }
     </section>
 
     <footer>
-        <span>Inlay <span class="muted">· Early browser proof of concept</span></span>
+        <span>Inlay <span class="muted">· Early browser version</span></span>
         <span>OpenCV · WebAssembly · No uploads</span>
     </footer>
 </main>
@@ -104,14 +113,21 @@
 @code {
     private const long MaximumFileSize = 25 * 1024 * 1024;
     private readonly ImageDetector detector = new();
+    private byte[]? sourceBytes;
     private byte[]? cropBytes;
     private string fileName = "";
     private string sourcePreview = "";
     private string cropPreview = "";
     private string error = "";
+    private string validationMessage = "";
     private bool isProcessing;
     private int sourceWidth;
     private int sourceHeight;
+    private int cropX;
+    private int cropY;
+    private int cropWidth;
+    private int cropHeight;
+    private int cornerRadius;
     private DetectionResult? detection;
 
     private string StatusClass => detection?.Status switch
@@ -145,10 +161,10 @@
             await using var stream = file.OpenReadStream(MaximumFileSize);
             using var memory = new MemoryStream();
             await stream.CopyToAsync(memory);
-            var encoded = memory.ToArray();
-            sourcePreview = $"data:{file.ContentType};base64,{Convert.ToBase64String(encoded)}";
+            sourceBytes = memory.ToArray();
+            sourcePreview = $"data:{file.ContentType};base64,{Convert.ToBase64String(sourceBytes)}";
 
-            using var source = Cv2.ImDecode(encoded, ImreadModes.Color);
+            using var source = Cv2.ImDecode(sourceBytes, ImreadModes.Color);
             if (source.Empty())
                 throw new InvalidDataException("OpenCV could not decode this image.");
 
@@ -158,21 +174,19 @@
 
             if (detection.Best is not null)
             {
-                var bounds = detection.Best.Bounds;
-                using var crop = new Mat(source, bounds);
-                using var bgra = new Mat();
-                Cv2.CvtColor(crop, bgra, ColorConversionCodes.BGR2BGRA);
-
-                var radius = detection.Best.CornerRadius;
-                using var mask = ImageExtractor.CreateRoundedMask(bounds.Width, bounds.Height, radius);
-                Cv2.InsertChannel(mask, bgra, 3);
-
-                if (!Cv2.ImEncode(".png", bgra, out var encodedCrop))
-                    throw new InvalidOperationException("OpenCV could not encode the crop as PNG.");
-
-                cropBytes = encodedCrop;
-                cropPreview = $"data:image/png;base64,{Convert.ToBase64String(encodedCrop)}";
+                SetBounds(detection.Best.Bounds);
+                cornerRadius = detection.Best.CornerRadius;
             }
+            else
+            {
+                cropX = 0;
+                cropY = 0;
+                cropWidth = sourceWidth;
+                cropHeight = sourceHeight;
+                cornerRadius = 0;
+            }
+
+            ApplyCrop();
         }
         catch (Exception exception)
         {
@@ -182,6 +196,70 @@
         finally
         {
             isProcessing = false;
+        }
+    }
+
+    private void SetBounds(Rect bounds)
+    {
+        cropX = bounds.X;
+        cropY = bounds.Y;
+        cropWidth = bounds.Width;
+        cropHeight = bounds.Height;
+    }
+
+    private void UseDetectionBounds()
+    {
+        if (detection?.Best is null)
+            return;
+
+        SetBounds(detection.Best.Bounds);
+        cornerRadius = detection.Best.CornerRadius;
+        ApplyCrop();
+    }
+
+    private void ApplyCrop()
+    {
+        validationMessage = "";
+        if (sourceBytes is null)
+            return;
+
+        if (cropX < 0 || cropY < 0 || cropWidth <= 0 || cropHeight <= 0 ||
+            cropX >= sourceWidth || cropY >= sourceHeight ||
+            (long)cropX + cropWidth > sourceWidth || (long)cropY + cropHeight > sourceHeight)
+        {
+            validationMessage = "The crop rectangle must fit inside the original image.";
+            return;
+        }
+
+        if (cornerRadius < 0 || cornerRadius > Math.Min(cropWidth, cropHeight) / 2)
+        {
+            validationMessage = "The corner radius is outside the allowed range.";
+            return;
+        }
+
+        try
+        {
+            using var source = Cv2.ImDecode(sourceBytes, ImreadModes.Color);
+            var bounds = new Rect(cropX, cropY, cropWidth, cropHeight);
+            using var crop = new Mat(source, bounds);
+            using var bgra = new Mat();
+            Cv2.CvtColor(crop, bgra, ColorConversionCodes.BGR2BGRA);
+
+            using var mask = ImageExtractor.CreateRoundedMask(cropWidth, cropHeight, cornerRadius);
+            Cv2.InsertChannel(mask, bgra, 3);
+
+            if (!Cv2.ImEncode(".png", bgra, out var encodedCrop))
+                throw new InvalidOperationException("OpenCV could not encode the crop as PNG.");
+
+            cropBytes = encodedCrop;
+            cropPreview = $"data:image/png;base64,{Convert.ToBase64String(encodedCrop)}";
+            validationMessage = "";
+        }
+        catch (Exception exception)
+        {
+            cropBytes = null;
+            cropPreview = "";
+            validationMessage = $"Could not create crop: {exception.Message}";
         }
     }
 
@@ -198,12 +276,15 @@
 
     private void Reset()
     {
+        sourceBytes = null;
         cropBytes = null;
         sourcePreview = "";
         cropPreview = "";
         error = "";
+        validationMessage = "";
         detection = null;
         sourceWidth = 0;
         sourceHeight = 0;
+        cropX = cropY = cropWidth = cropHeight = cornerRadius = 0;
     }
 }
