@@ -51,6 +51,11 @@ public sealed class ImageDetector
                 continue;
             }
 
+            // A contour can capture the correct top and bottom edges while using
+            // an unrelated vertical edge as its left boundary. Re-evaluate the
+            // horizontal bounds against the full-height edge evidence.
+            bounds = RefineHorizontalBounds(edges, bounds);
+
             var ratio = (double)bounds.Width / bounds.Height;
             if (ratio < 0.25 || ratio > 4.0)
             {
@@ -114,6 +119,95 @@ public sealed class ImageDetector
                 : $"Best candidate scored {best.Confidence:P0}; automatic extraction requires {DetectionResult.AutomaticThreshold:P0}.");
 
         return new DetectionResult(DetectionStatus.Extracted, best, second, "Candidate passed the initial heuristic thresholds.");
+    }
+
+
+    private static Rect RefineHorizontalBounds(Mat edges, Rect bounds)
+    {
+        var verticalInset = Math.Max(2, bounds.Height / 10);
+        var verticalTop = bounds.Y + verticalInset;
+        var verticalHeight = bounds.Height - verticalInset * 2;
+        if (verticalHeight < 20 || bounds.Height <= 0)
+            return bounds;
+
+        using var verticalRegion = new Mat(edges, new Rect(0, verticalTop, edges.Width, verticalHeight));
+        using var columnCounts = new Mat();
+        Cv2.Reduce(verticalRegion, columnCounts, 0, ReduceTypes.Sum, MatType.CV_32S);
+
+        var profile = new double[edges.Width];
+        for (var x = 1; x < edges.Width - 1; x++)
+        {
+            var previous = columnCounts.At<int>(0, x - 1);
+            var current = columnCounts.At<int>(0, x);
+            var next = columnCounts.At<int>(0, x + 1);
+            profile[x] = (previous + current + next) / (3.0 * verticalHeight);
+        }
+
+        var peaks = new List<(int X, double Strength)>();
+        for (var x = 2; x < edges.Width - 2; x++)
+        {
+            if (profile[x] < 0.035 || profile[x] < profile[x - 1] || profile[x] < profile[x + 1])
+                continue;
+
+            if (peaks.All(peak => Math.Abs(peak.X - x) > 5))
+                peaks.Add((x, profile[x]));
+        }
+
+        peaks = peaks.OrderByDescending(peak => peak.Strength).Take(36).ToList();
+        if (peaks.Count < 2)
+            return bounds;
+
+        var thickness = Math.Max(1, Math.Min(3, bounds.Height / 100));
+        var originalBoundary = MeasureBoundaryContinuity(edges, bounds);
+        var bestBoundary = originalBoundary;
+        var bestBounds = bounds;
+
+        foreach (var left in peaks)
+        {
+            foreach (var right in peaks)
+            {
+                var width = right.X - left.X;
+                if (width <= 0 || width < edges.Width * 0.18 || width >= edges.Width * 0.985)
+                    continue;
+
+                var ratio = (double)width / bounds.Height;
+                var areaRatio = (double)width * bounds.Height / (edges.Width * edges.Height);
+                if (ratio < 0.25 || ratio > 4.0 || areaRatio < 0.04 || areaRatio > 0.94)
+                    continue;
+
+                var horizontalInset = Math.Max(2, width / 10);
+                var horizontalX = left.X + horizontalInset;
+                var horizontalWidth = width - horizontalInset * 2;
+                if (horizontalWidth <= 0)
+                    continue;
+
+                var leftStrength = left.Strength;
+                var rightStrength = right.Strength;
+                if (leftStrength < 0.035 || rightStrength < 0.035)
+                    continue;
+
+                var top = CountEdges(edges, new Rect(horizontalX, bounds.Y, horizontalWidth, thickness)) /
+                          (horizontalWidth * (double)thickness);
+                var bottom = CountEdges(edges, new Rect(horizontalX, bounds.Bottom - thickness, horizontalWidth, thickness)) /
+                             (horizontalWidth * (double)thickness);
+                if (top < 0.025 || bottom < 0.025)
+                    continue;
+
+                var continuity = (leftStrength + rightStrength + top + bottom) * 0.55;
+                var verticalBalance = Math.Min(leftStrength, rightStrength) / Math.Max(leftStrength, rightStrength);
+                var horizontalBalance = Math.Min(top, bottom) / Math.Max(top, bottom);
+                continuity *= 0.75 + 0.25 * Math.Sqrt(verticalBalance * horizontalBalance);
+                continuity = Math.Clamp(continuity, 0, 1);
+
+                if (continuity > bestBoundary)
+                {
+                    bestBoundary = continuity;
+                    bestBounds = new Rect(left.X, bounds.Y, width, bounds.Height);
+                }
+            }
+        }
+
+        return bestBoundary >= originalBoundary + 0.08 ? bestBounds : bounds;
     }
 
     private static double MeasureBoundaryContinuity(Mat edges, Rect rect)
