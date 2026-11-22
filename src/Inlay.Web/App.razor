@@ -1,0 +1,11 @@
+<Router AppAssembly="@typeof(App).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" />
+    </Found>
+    <NotFound>
+        <main class="shell">
+            <h1>Page not found</h1>
+            <a href="./">Back to Inlay</a>
+        </main>
+    </NotFound>
+</Router>

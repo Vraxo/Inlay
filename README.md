@@ -4,12 +4,34 @@
 
 > Early implementation: detection scores are heuristic and have not yet been calibrated against the 200-image validation set described in the product requirements. Treat automatic extraction as experimental until that validation is complete.
 
+## Browser proof of concept
+
+Inlay includes a standalone Blazor WebAssembly app that runs the existing C# detector with OpenCvSharp's WebAssembly runtime. Image decoding, detection, and PNG encoding happen in the browser; screenshots are not uploaded.
+
+Requires the .NET 11 SDK and the WebAssembly build tools workload:
+
+```powershell
+dotnet workload install wasm-tools
+dotnet run --project src/Inlay.Web
+```
+
+For a static production build:
+
+```powershell
+dotnet publish src/Inlay.Web -c Release
+```
+
+The published files are written to `src/Inlay.Web/bin/Release/net11.0/publish/wwwroot`. They can be hosted as static files, including on GitHub Pages. The deployment must preserve the app's repository subpath and publish this directory; no server-side .NET hosting is required.
+
+This is an initial technical proof of concept, not yet the finished crop editor. It currently supports one image at a time and only offers automatic extraction when the detector returns its `Extracted` status.
+
 ## Requirements
 
 - .NET 11 SDK (11.0.100 or later feature band)
-- Windows x64 for the initial native OpenCV runtime
+- Windows x64 for the initial native CLI runtime
+- .NET WebAssembly build tools workload for the browser app
 
-## Usage
+## CLI usage
 
 ```powershell
 inlay screenshot.jpg
@@ -44,16 +66,16 @@ dotnet build --configuration Release
 dotnet test --configuration Release
 ```
 
-The GitHub Actions workflow builds and tests on every push and pull request, publishes a self-contained Windows x64 executable, and uploads build/test outputs as downloadable workflow artifacts.
+The repository's existing CI/deployment setup is intentionally not modified by this change.
 
 ## Privacy
 
-All image processing happens locally. Inlay does not make network requests, send images elsewhere, or include image contents in reports.
+The browser app processes images locally using WebAssembly. The CLI processes images locally as well. Neither sends image data to a server.
 
 ## Current limitations
 
 - The first detector is a conservative classical-CV baseline, not a trained or calibrated production detector.
-- EXIF orientation is delegated to OpenCV's standard color-image loading behavior.
+- The browser app is a proof of concept; it does not yet provide manual crop adjustment or batch processing.
 - Rounded-corner radius estimation is based on contour geometry and requires further real-world validation.
 - Only one dominant foreground image is targeted.
-- Windows x64 is the supported runtime target for this first implementation.
+- Windows x64 is the supported native CLI runtime target for this first implementation.

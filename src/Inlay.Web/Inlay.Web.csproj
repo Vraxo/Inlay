@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <WasmBuildNative>true</WasmBuildNative>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <WasmInitialHeapSize>268435456</WasmInitialHeapSize>
+    <WasmAllowUndefinedSymbols>true</WasmAllowUndefinedSymbols>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="11.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="11.0.0" PrivateAssets="all" />
+    <PackageReference Include="OpenCvSharp5" Version="5.1.0.20261115" />
+    <PackageReference Include="OpenCvSharp5.runtime.wasm" Version="5.1.0.20261115" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../Inlay/Detection/DetectionResult.cs" Link="Detection/DetectionResult.cs" />
+    <Compile Include="../Inlay/Detection/ImageDetector.cs" Link="Detection/ImageDetector.cs" />
+    <Compile Include="../Inlay/Extraction/ImageExtractor.cs" Link="Extraction/ImageExtractor.cs" />
+  </ItemGroup>
+</Project>
