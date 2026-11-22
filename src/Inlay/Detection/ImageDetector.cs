@@ -130,48 +130,48 @@ public sealed class ImageDetector
         if (verticalHeight < 20 || bounds.Height <= 0)
             return bounds;
 
-        using var verticalRegion = new Mat(edges, new Rect(0, verticalTop, edges.Width, verticalHeight));
+        var imageWidth = edges.Width;
+        var imageHeight = edges.Height;
+        using var verticalRegion = new Mat(edges, new Rect(0, verticalTop, imageWidth, verticalHeight));
         using var columnCounts = new Mat();
         Cv2.Reduce(verticalRegion, columnCounts, 0, ReduceTypes.Sum, MatType.CV_32S);
 
-        var profile = new double[edges.Width];
-        for (var x = 1; x < edges.Width - 1; x++)
-        {
-            var previous = columnCounts.At<int>(0, x - 1);
-            var current = columnCounts.At<int>(0, x);
-            var next = columnCounts.At<int>(0, x + 1);
-            profile[x] = (previous + current + next) / (3.0 * verticalHeight);
-        }
+        var columnStrengths = new double[imageWidth];
+        for (var x = 0; x < imageWidth; x++)
+            columnStrengths[x] = columnCounts.At<int>(0, x) / (double)verticalHeight;
+
+        var profile = new double[imageWidth];
+        for (var x = 1; x < imageWidth - 1; x++)
+            profile[x] = (columnStrengths[x - 1] + columnStrengths[x] + columnStrengths[x + 1]) / 3.0;
 
         var peaks = new List<(int X, double Strength)>();
-        for (var x = 2; x < edges.Width - 2; x++)
+        for (var x = 2; x < imageWidth - 2; x++)
         {
-            if (profile[x] < 0.035 || profile[x] < profile[x - 1] || profile[x] < profile[x + 1])
+            if (profile[x] < 0.015 || profile[x] < profile[x - 1] || profile[x] < profile[x + 1])
                 continue;
 
             if (peaks.All(peak => Math.Abs(peak.X - x) > 5))
                 peaks.Add((x, profile[x]));
         }
 
-        peaks = peaks.OrderByDescending(peak => peak.Strength).Take(36).ToList();
+        peaks = peaks.OrderByDescending(peak => peak.Strength).Take(64).ToList();
         if (peaks.Count < 2)
             return bounds;
 
         var thickness = Math.Max(1, Math.Min(3, bounds.Height / 100));
         var originalBoundary = MeasureBoundaryContinuity(edges, bounds);
-        var bestBoundary = originalBoundary;
-        var bestBounds = bounds;
+        var widerCandidates = new List<(Rect Bounds, double Boundary)>();
 
         foreach (var left in peaks)
         {
             foreach (var right in peaks)
             {
                 var width = right.X - left.X;
-                if (width <= 0 || width < edges.Width * 0.18 || width >= edges.Width * 0.985)
+                if (width <= bounds.Width + 6 || width < imageWidth * 0.18 || width >= imageWidth * 0.985)
                     continue;
 
                 var ratio = (double)width / bounds.Height;
-                var areaRatio = (double)width * bounds.Height / (edges.Width * edges.Height);
+                var areaRatio = (double)width * bounds.Height / (imageWidth * imageHeight);
                 if (ratio < 0.25 || ratio > 4.0 || areaRatio < 0.04 || areaRatio > 0.94)
                     continue;
 
@@ -183,7 +183,7 @@ public sealed class ImageDetector
 
                 var leftStrength = left.Strength;
                 var rightStrength = right.Strength;
-                if (leftStrength < 0.035 || rightStrength < 0.035)
+                if (leftStrength < 0.015 || rightStrength < 0.015)
                     continue;
 
                 var top = CountEdges(edges, new Rect(horizontalX, bounds.Y, horizontalWidth, thickness)) /
@@ -197,17 +197,21 @@ public sealed class ImageDetector
                 var verticalBalance = Math.Min(leftStrength, rightStrength) / Math.Max(leftStrength, rightStrength);
                 var horizontalBalance = Math.Min(top, bottom) / Math.Max(top, bottom);
                 continuity *= 0.75 + 0.25 * Math.Sqrt(verticalBalance * horizontalBalance);
-                continuity = Math.Clamp(continuity, 0, 1);
 
-                if (continuity > bestBoundary)
-                {
-                    bestBoundary = continuity;
-                    bestBounds = new Rect(left.X, bounds.Y, width, bounds.Height);
-                }
+                // A stronger internal line can produce a narrower but otherwise
+                // plausible rectangle. Keep wider alternatives when all four
+                // boundaries remain close in quality to the current candidate.
+                if (continuity >= originalBoundary - 0.12)
+                    widerCandidates.Add((new Rect(left.X, bounds.Y, width, bounds.Height), continuity));
             }
         }
 
-        return bestBoundary >= originalBoundary + 0.08 ? bestBounds : bounds;
+        var wider = widerCandidates
+            .OrderByDescending(candidate => candidate.Bounds.Width)
+            .ThenByDescending(candidate => candidate.Boundary)
+            .FirstOrDefault();
+
+        return wider.Bounds.Width > 0 ? wider.Bounds : bounds;
     }
 
     private static double MeasureBoundaryContinuity(Mat edges, Rect rect)
