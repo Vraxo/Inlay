@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
+    <AssemblyName>inlay</AssemblyName>
+    <RootNamespace>Inlay</RootNamespace>
+    <Version>0.1.0</Version>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="OpenCvSharp5" Version="5.1.0.20261115" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
+    <PackageReference Include="OpenCvSharp5.runtime.win" Version="5.1.0.20261115" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
+    <PackageReference Include="OpenCvSharp5.official.runtime.linux-x64.slim" Version="5.1.0.20261115" />
+  </ItemGroup>
+</Project>

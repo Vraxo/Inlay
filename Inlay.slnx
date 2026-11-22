@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/Inlay/Inlay.csproj" />
+  <Project Path="tests/Inlay.Tests/Inlay.Tests.csproj" />
+</Solution>
