@@ -1,3 +1,5 @@
+using Xunit;
+
 using Inlay.Cli;
 
 namespace Inlay.Tests;
