@@ -32,11 +32,11 @@ jobs:
       - name: Build
         run: dotnet build Inlay.slnx --configuration Release --no-restore
 
-      - name: Test
-        run: dotnet test Inlay.slnx --configuration Release --no-build --logger "trx;LogFileName=inlay-tests.trx" --results-directory artifacts/test-results
-
       - name: Publish self-contained Windows x64 CLI
         run: dotnet publish src/Inlay/Inlay.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=embedded --output artifacts/publish/win-x64
+
+      - name: Test
+        run: dotnet test Inlay.slnx --configuration Release --no-build --logger "trx;LogFileName=inlay-tests.trx" --results-directory artifacts/test-results
 
       - name: Upload application and test artifacts
         if: always()
