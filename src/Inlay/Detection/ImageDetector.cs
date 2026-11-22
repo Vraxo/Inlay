@@ -34,20 +34,15 @@ public sealed class ImageDetector
 
         Cv2.FindContours(closed, out Point[][] contours, out _, RetrievalModes.List, ContourApproximationModes.ApproxSimple);
         var candidates = new List<DetectionCandidate>();
-        var rejectedByContourArea = 0;
         var rejectedByBounds = 0;
         var rejectedByAspectRatio = 0;
         var rejectedByAreaRatio = 0;
 
         foreach (var contour in contours)
         {
-            var area = Math.Abs(Cv2.ContourArea(contour));
-            if (area < analysis.Width * analysis.Height * 0.035)
-            {
-                rejectedByContourArea++;
-                continue;
-            }
-
+            // Canny contours often trace only a thin edge fragment, so their
+            // polygon area is not a reliable measure of the image region enclosed.
+            // Use the bounding rectangle and its area for size filtering instead.
             var bounds = Cv2.BoundingRect(contour);
             if (bounds.Width < analysis.Width * 0.18 || bounds.Height < analysis.Height * 0.18 ||
                 (bounds.Width >= analysis.Width * 0.985 && bounds.Height >= analysis.Height * 0.985))
@@ -100,7 +95,7 @@ public sealed class ImageDetector
         if (ranked.Length == 0)
         {
             var reason = $"No candidate survived filtering. {contours.Length} contours examined: " +
-                         $"{rejectedByContourArea} too small, {rejectedByBounds} outside size limits, " +
+                         $"{rejectedByBounds} outside size limits, " +
                          $"{rejectedByAspectRatio} outside aspect limits, {rejectedByAreaRatio} outside area limits.";
             return new DetectionResult(DetectionStatus.Rejected, null, null, reason);
         }
