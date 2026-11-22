@@ -39,10 +39,14 @@ public sealed class BatchProcessor
             ? isDirectory ? Path.Combine(input, "inlay") : Path.GetDirectoryName(input)!
             : Path.GetFullPath(options.Output);
 
+        var outputIsNested = isDirectory &&
+            !string.Equals(Path.GetFullPath(outputRoot), input, StringComparison.OrdinalIgnoreCase) &&
+            IsWithinDirectory(outputRoot, input);
+
         var files = isDirectory
             ? (options.Recursive ? Directory.EnumerateFiles(input, "*", SearchOption.AllDirectories) : Directory.EnumerateFiles(input))
                 .Where(path => SupportedExtensions.Contains(Path.GetExtension(path)))
-                .Where(path => !IsWithinDirectory(path, outputRoot))
+                .Where(path => !outputIsNested || !IsWithinDirectory(path, outputRoot))
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray()
             : new[] { input };
 
