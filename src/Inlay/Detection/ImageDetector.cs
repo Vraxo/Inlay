@@ -14,7 +14,7 @@ public sealed class ImageDetector
         var scale = Math.Min(1.0, (double)MaximumAnalysisDimension / Math.Max(source.Width, source.Height));
         using var analysis = new Mat();
         if (scale < 1.0)
-            Cv2.Resize(source, analysis, new Size(Math.Round(source.Width * scale), Math.Round(source.Height * scale)), interpolation: InterpolationFlags.Area);
+            Cv2.Resize(source, analysis, new Size((int)Math.Round(source.Width * scale), (int)Math.Round(source.Height * scale)), interpolation: InterpolationFlags.Area);
         else
             source.CopyTo(analysis);
 
