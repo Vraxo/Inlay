@@ -21,37 +21,56 @@ public sealed class ImageDetector
         using var gray = new Mat();
         using var blurred = new Mat();
         using var edges = new Mat();
+        using var strongEdges = new Mat();
+        using var softEdges = new Mat();
         using var closed = new Mat();
         using var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(5, 5));
         Cv2.CvtColor(analysis, gray, ColorConversionCodes.BGR2GRAY);
         Cv2.GaussianBlur(gray, blurred, new Size(3, 3), 0);
-        Cv2.Canny(blurred, edges, 55, 145);
+        Cv2.Canny(blurred, strongEdges, 55, 145);
+        Cv2.Canny(blurred, softEdges, 25, 75);
+        Cv2.BitwiseOr(strongEdges, softEdges, edges);
         Cv2.MorphologyEx(edges, closed, MorphTypes.Close, kernel);
 
         Cv2.FindContours(closed, out Point[][] contours, out _, RetrievalModes.List, ContourApproximationModes.ApproxSimple);
         var candidates = new List<DetectionCandidate>();
+        var rejectedByContourArea = 0;
+        var rejectedByBounds = 0;
+        var rejectedByAspectRatio = 0;
+        var rejectedByAreaRatio = 0;
 
         foreach (var contour in contours)
         {
             var area = Math.Abs(Cv2.ContourArea(contour));
             if (area < analysis.Width * analysis.Height * 0.035)
+            {
+                rejectedByContourArea++;
                 continue;
+            }
 
             var bounds = Cv2.BoundingRect(contour);
-            if (bounds.Width < analysis.Width * 0.18 || bounds.Height < analysis.Height * 0.18)
+            if (bounds.Width < analysis.Width * 0.18 || bounds.Height < analysis.Height * 0.18 ||
+                (bounds.Width >= analysis.Width * 0.985 && bounds.Height >= analysis.Height * 0.985))
+            {
+                rejectedByBounds++;
                 continue;
-            if (bounds.Width >= analysis.Width * 0.985 && bounds.Height >= analysis.Height * 0.985)
-                continue;
+            }
 
             var ratio = (double)bounds.Width / bounds.Height;
             if (ratio < 0.25 || ratio > 4.0)
+            {
+                rejectedByAspectRatio++;
                 continue;
+            }
 
             var polygon = Cv2.ApproxPolyDP(contour, Math.Max(2.0, Cv2.ArcLength(contour, true) * 0.018), true);
             var geometry = polygon.Length == 4 && Cv2.IsContourConvex(polygon) ? 1.0 : Math.Clamp(1.0 - Math.Abs(polygon.Length - 4) / 18.0, 0.35, 0.9);
             var areaRatio = (double)(bounds.Width * bounds.Height) / (analysis.Width * analysis.Height);
             if (areaRatio > 0.94 || areaRatio < 0.04)
+            {
+                rejectedByAreaRatio++;
                 continue;
+            }
 
             var boundary = MeasureBoundaryContinuity(edges, bounds);
             var edgeStrength = MeasureEdgeStrength(gray, bounds);
@@ -79,19 +98,25 @@ public sealed class ImageDetector
 
         var ranked = candidates.OrderByDescending(x => x.Confidence).ToArray();
         if (ranked.Length == 0)
-            return new DetectionResult(DetectionStatus.Rejected, null, null, "No plausible foreground rectangle was found.");
+        {
+            var reason = $"No candidate survived filtering. {contours.Length} contours examined: " +
+                         $"{rejectedByContourArea} too small, {rejectedByBounds} outside size limits, " +
+                         $"{rejectedByAspectRatio} outside aspect limits, {rejectedByAreaRatio} outside area limits.";
+            return new DetectionResult(DetectionStatus.Rejected, null, null, reason);
+        }
 
         var best = ranked[0];
         var second = ranked.Length > 1 ? ranked[1] : null;
         var margin = second is null ? 1.0 : best.Confidence - second.Confidence;
 
         if (best.Confidence < DetectionResult.ReviewThreshold)
-            return new DetectionResult(DetectionStatus.Rejected, best, second, "The strongest candidate did not meet the minimum confidence threshold.");
+            return new DetectionResult(DetectionStatus.Rejected, best, second,
+                $"Best candidate scored {best.Confidence:P0}, below the review threshold of {DetectionResult.ReviewThreshold:P0}.");
 
         if (best.Confidence < DetectionResult.AutomaticThreshold || margin < 0.08)
             return new DetectionResult(DetectionStatus.Review, best, second, margin < 0.08
-                ? "Multiple candidates have similar scores."
-                : "The candidate requires visual review.");
+                ? $"Top candidates are too close ({best.Confidence:P0} and {second!.Confidence:P0})."
+                : $"Best candidate scored {best.Confidence:P0}; automatic extraction requires {DetectionResult.AutomaticThreshold:P0}.");
 
         return new DetectionResult(DetectionStatus.Extracted, best, second, "Candidate passed the initial heuristic thresholds.");
     }
