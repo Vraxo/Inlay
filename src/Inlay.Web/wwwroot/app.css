@@ -99,3 +99,11 @@ footer { padding: 24px 0 36px; display: flex; justify-content: space-between; ga
     .editor-actions { align-items: stretch; flex-direction: column; }
     .apply { width: 100%; }
 }
+
+.detection-notice { margin-top: 14px; padding: 13px 15px; border: 1px solid #514b58; border-radius: 8px; background: #302d36; }
+.detection-notice strong { display: block; margin-bottom: 5px; font-size: 12px; }
+.detection-notice p { margin: 0; color: #aaa5b1; font-size: 12px; line-height: 1.6; }
+.detection-notice.rejected { border-color: #76505f; }
+.detection-notice.rejected strong { color: #fc80a5; }
+.detection-notice.review { border-color: #746442; }
+.detection-notice.review strong { color: #ffd866; }
