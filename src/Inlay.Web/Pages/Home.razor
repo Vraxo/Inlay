@@ -75,6 +75,27 @@
                 </div>
             </div>
 
+            @if (detection is { Status: DetectionStatus.Rejected or DetectionStatus.Review })
+            {
+                <div class="detection-notice @StatusClass">
+                    @if (detection.Best is null)
+                    {
+                        <strong>No automatic crop found</strong>
+                        <p>@detection.Reason The preview above is the entire screenshot, not an extracted image. Set the crop rectangle below to select the image manually.</p>
+                    }
+                    else if (detection.Status == DetectionStatus.Rejected)
+                    {
+                        <strong>Possible crop found, but confidence is too low</strong>
+                        <p>@detection.Reason Check the suggested rectangle below and adjust it before downloading.</p>
+                    }
+                    else
+                    {
+                        <strong>Possible crop found — please review it</strong>
+                        <p>@detection.Reason Check the suggested rectangle below and adjust it if the edges do not line up.</p>
+                    }
+                </div>
+            }
+
             <section class="crop-editor" aria-label="Crop adjustment">
                 <div class="editor-heading">
                     <div>
@@ -98,7 +119,6 @@
             </section>
 
             <div class="result-footer">
-                <p class="reason">@(detection?.Reason ?? "Manual crop — no automatic candidate was selected.")</p>
                 <button class="download" @onclick="DownloadCrop" disabled="@(cropBytes is null)">Download PNG <span>↓</span></button>
             </div>
         }
@@ -220,6 +240,8 @@
     private void ApplyCrop()
     {
         validationMessage = "";
+        cropBytes = null;
+        cropPreview = "";
         if (sourceBytes is null)
             return;
 

@@ -75,7 +75,7 @@ The browser app processes images locally using WebAssembly. The CLI processes im
 ## Current limitations
 
 - The first detector is a conservative classical-CV baseline, not a trained or calibrated production detector.
-- The browser app is a proof of concept; it does not yet provide manual crop adjustment or batch processing.
+- The browser app is a proof of concept; it provides manual crop adjustment for one image at a time, but not batch processing.
 - Rounded-corner radius estimation is based on contour geometry and requires further real-world validation.
 - Only one dominant foreground image is targeted.
 - Windows x64 is the supported native CLI runtime target for this first implementation.
