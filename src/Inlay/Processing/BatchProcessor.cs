@@ -63,6 +63,14 @@ public sealed class BatchProcessor
                 var previewPath = Path.ChangeExtension(output, ".preview.jpg");
                 var reportPath = Path.ChangeExtension(output, ".json");
 
+                if (!options.Overwrite &&
+                    (File.Exists(output) || (options.Preview && File.Exists(previewPath)) || (options.Report && File.Exists(reportPath))))
+                {
+                    Console.WriteLine($"SKIP    {relative} — one or more output files already exist (use --overwrite)");
+                    counts[4]++;
+                    continue;
+                }
+
                 using var source = Cv2.ImRead(file, ImreadModes.Color);
                 if (source.Empty())
                     throw new InvalidDataException("OpenCV could not decode this image.");
@@ -89,13 +97,6 @@ public sealed class BatchProcessor
                 if (detection.Status == DetectionStatus.Extracted && detection.Best is not null)
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(output)!);
-                    if (File.Exists(output) && !options.Overwrite)
-                    {
-                        Console.WriteLine($"SKIP    {relative} — output exists (use --overwrite)");
-                        counts[4]++;
-                        continue;
-                    }
-
                     extractor.Save(source, detection.Best.Bounds, output, detection.Best.CornerRadius, options.KeepCorners);
                     savedOutput = output;
                     counts[1]++;
