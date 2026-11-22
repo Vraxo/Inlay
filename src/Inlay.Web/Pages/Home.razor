@@ -167,10 +167,11 @@
                 using var mask = ImageExtractor.CreateRoundedMask(bounds.Width, bounds.Height, radius);
                 Cv2.InsertChannel(mask, bgra, 3);
 
-                if (!Cv2.ImEncode(".png", bgra, out cropBytes))
+                if (!Cv2.ImEncode(".png", bgra, out var encodedCrop))
                     throw new InvalidOperationException("OpenCV could not encode the crop as PNG.");
 
-                cropPreview = $"data:image/png;base64,{Convert.ToBase64String(cropBytes)}";
+                cropBytes = encodedCrop;
+                cropPreview = $"data:image/png;base64,{Convert.ToBase64String(encodedCrop)}";
             }
         }
         catch (Exception exception)
