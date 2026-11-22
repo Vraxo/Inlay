@@ -113,7 +113,8 @@ public sealed class ImageDetector
         rect = ClampRect(rect, edges.Width, edges.Height);
         if (rect.Width <= 0 || rect.Height <= 0)
             return 0;
-        return Cv2.CountNonZero(new Mat(edges, rect));
+        using var region = new Mat(edges, rect);
+        return Cv2.CountNonZero(region);
     }
 
     private static double MeasureEdgeStrength(Mat gray, Rect rect)
@@ -191,8 +192,14 @@ public sealed class ImageDetector
 
     private static double IntersectionOverUnion(Rect a, Rect b)
     {
-        var intersection = (a & b);
-        var area = (double)a.Width * a.Height + (double)b.Width * b.Height - (double)intersection.Width * intersection.Height;
-        return area <= 0 ? 0 : intersection.Width * (double)intersection.Height / area;
+        var left = Math.Max(a.Left, b.Left);
+        var top = Math.Max(a.Top, b.Top);
+        var right = Math.Min(a.Right, b.Right);
+        var bottom = Math.Min(a.Bottom, b.Bottom);
+        var intersectionWidth = Math.Max(0, right - left);
+        var intersectionHeight = Math.Max(0, bottom - top);
+        var intersectionArea = (double)intersectionWidth * intersectionHeight;
+        var unionArea = (double)a.Width * a.Height + (double)b.Width * b.Height - intersectionArea;
+        return unionArea <= 0 ? 0 : intersectionArea / unionArea;
     }
 }
