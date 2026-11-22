@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using OpenCvSharp;
 
-Cv2.SetLogLevel(LogLevel.ERROR);
+Cv2.SetLogLevel(OpenCvSharp.LogLevel.ERROR);
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
