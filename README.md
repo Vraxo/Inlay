@@ -23,7 +23,7 @@ dotnet publish src/Inlay.Web -c Release
 
 The published files are written to `src/Inlay.Web/bin/Release/net11.0/publish/wwwroot`. They can be hosted as static files, including on GitHub Pages. The deployment must preserve the app's repository subpath and publish this directory; no server-side .NET hosting is required.
 
-The browser app currently supports one image at a time, automatic candidate detection, editable crop coordinates, corner-radius adjustment, a live PNG preview, and local download. Detection is still experimental; when it cannot find a candidate, you can define the crop manually using source-image pixel coordinates.
+The browser app accepts batches of up to 50 images (100 MB total, 25 MB per image) and processes them sequentially. Each image shows its own reading, detection, preview, and completion state; finished crops can be inspected and downloaded while the remaining files continue. It also supports editable crop coordinates, corner-radius adjustment, a live PNG preview, and local download. Detection is still experimental; when it cannot find a candidate, you can define the crop manually using source-image pixel coordinates.
 
 ## Requirements
 
@@ -75,7 +75,7 @@ The browser app processes images locally using WebAssembly. The CLI processes im
 ## Current limitations
 
 - The first detector is a conservative classical-CV baseline, not a trained or calibrated production detector.
-- The browser app is a proof of concept; it provides manual crop adjustment for one image at a time, but not batch processing.
+- The browser app processes each batch sequentially rather than detecting multiple images in parallel; each batch is limited to 50 images and 100 MB total, with a 25 MB per-image limit.
 - Rounded-corner radius estimation is based on contour geometry and requires further real-world validation.
 - Only one dominant foreground image is targeted.
 - Windows x64 is the supported native CLI runtime target for this first implementation.
