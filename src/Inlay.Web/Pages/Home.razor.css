@@ -1264,3 +1264,35 @@ html[data-theme="dark"] .status.processing {
         height: 36px;
     }
 }
+
+
+/* The component stylesheet loads after app.css, so keep the upload surface
+   and its gradient border together here to avoid hover rules winning the cascade. */
+.dropzone,
+.dropzone:hover,
+.dropzone.dragging {
+    position: relative;
+    isolation: isolate;
+    border: 1px solid transparent;
+    background: transparent !important;
+    box-shadow: none;
+}
+
+.dropzone::after {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    padding: 1.5px;
+    border-radius: inherit;
+    background: var(--brand-gradient);
+    content: "";
+    pointer-events: none;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+}
+
+.dropzone > * {
+    position: relative;
+    z-index: 1;
+}
