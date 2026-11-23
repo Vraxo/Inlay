@@ -434,8 +434,6 @@
             editor.selection.addEventListener("pointerup", editor.onPointerUp);
             editor.selection.addEventListener("pointercancel", editor.onPointerUp);
             editor.selection.addEventListener("keydown", editor.onKeyDown);
-            editor.stage.addEventListener("pointermove", editor.onMagnifierMove);
-            editor.stage.addEventListener("pointerleave", editor.onMagnifierLeave);
             editor.radiusControl.addEventListener("input", editor.onRadiusInput);
             editor.radiusControl.addEventListener("change", editor.onRadiusChange);
             editor.image.addEventListener("load", editor.onImageLoad);
@@ -457,11 +455,8 @@
         editor.viewport = stage.closest(".crop-viewport");
 
         setCrop(editor, x, y, width, height, radius);
-        if (image.complete && image.naturalWidth) {
+        if (image.complete && image.naturalWidth && (sourceChanged || !editor.fitScale))
             editor.resetZoom();
-            if (!sourceChanged && editor.zoomFactor > 1)
-                editor.updateZoomButtons();
-        }
     }
 
     function setZoom(stage, mode) {
