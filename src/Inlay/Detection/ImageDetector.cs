@@ -51,11 +51,6 @@ public sealed class ImageDetector
                 continue;
             }
 
-            // A contour can capture the correct top and bottom edges while using
-            // an unrelated vertical edge as its left boundary. Re-evaluate the
-            // horizontal bounds against the full-height edge evidence.
-            bounds = RefineHorizontalBounds(edges, bounds);
-
             var ratio = (double)bounds.Width / bounds.Height;
             if (ratio < 0.25 || ratio > 4.0)
             {
@@ -105,7 +100,14 @@ public sealed class ImageDetector
             return new DetectionResult(DetectionStatus.Rejected, null, null, reason);
         }
 
+        // Rank the original contour candidates first. Refining every contour
+        // changes their scores and can make an unrelated, vertically misplaced
+        // rectangle win. Only adjust X after the best vertical candidate is chosen.
         var best = ranked[0];
+        var analysisBounds = ScaleRect(best.Bounds, scale);
+        var refinedBounds = RefineHorizontalBounds(edges, analysisBounds);
+        best = best with { Bounds = ScaleRect(refinedBounds, 1.0 / scale) };
+
         var second = ranked.Length > 1 ? ranked[1] : null;
         var margin = second is null ? 1.0 : best.Confidence - second.Confidence;
 
@@ -167,7 +169,10 @@ public sealed class ImageDetector
             foreach (var right in peaks)
             {
                 var width = right.X - left.X;
-                if (width <= bounds.Width + 6 || width < imageWidth * 0.18 || width >= imageWidth * 0.985)
+                var coversOriginal = left.X <= bounds.X && right.X >= bounds.Right - 6;
+                if (!coversOriginal || width <= bounds.Width + 6 ||
+                    width > bounds.Width * 2.5 || width < imageWidth * 0.18 ||
+                    width >= imageWidth * 0.985)
                     continue;
 
                 var ratio = (double)width / bounds.Height;
