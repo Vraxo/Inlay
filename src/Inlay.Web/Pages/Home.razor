@@ -153,7 +153,7 @@
                     else
                     {
                         <strong>Possible crop found — please review it</strong>
-                        <p>@activeImage.Detection.Reason Check the suggested rectangle and adjust it if the edges do not line up.</p>
+                        <p>@(activeImage.Detection?.Reason ?? "Review the suggested rectangle and adjust it if the edges do not line up.")</p>
                     }
                 </div>
             }
