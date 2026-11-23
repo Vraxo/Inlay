@@ -22,7 +22,7 @@
             <span class="upload-icon">↑</span>
             <strong>Drop screenshots here</strong>
             <span>or click to browse · PNG, JPEG or WebP · up to 25 MB each</span>
-            <span class="upload-limit">Up to 20 images · 100 MB total</span>
+            <span class="upload-limit">Up to 20 images · 50 MB total</span>
             <InputFile id="image-file" OnChange="LoadImages" accept="image/png,image/jpeg,image/webp" multiple />
         </label>
 
@@ -41,7 +41,7 @@
             <section class="batch-summary">
                 <div>
                     <strong>@images.Count image@(images.Count == 1 ? "" : "s") processed</strong>
-                    <span>@SuccessfulCount ready to download · @ReviewCount needing review or manual selection</span>
+                    <span>@SuccessfulCount ready · @ReviewCount to review · @FailedCount failed</span>
                 </div>
                 <button class="download batch-download" @onclick="DownloadAll" disabled="@(SuccessfulCount == 0)">Download all <span>↓</span></button>
             </section>
@@ -128,7 +128,7 @@
                         <strong>No automatic crop found</strong>
                         <p>@(activeImage.Detection?.Reason ?? "Set the crop rectangle manually.") The preview is the entire screenshot until you choose a crop.</p>
                     }
-                    else if (activeImage.Detection.Status == DetectionStatus.Rejected)
+                    else if (activeImage.Detection?.Status == DetectionStatus.Rejected)
                     {
                         <strong>Possible crop found, but confidence is too low</strong>
                         <p>@activeImage.Detection.Reason Check the suggested rectangle below and adjust it before downloading.</p>
