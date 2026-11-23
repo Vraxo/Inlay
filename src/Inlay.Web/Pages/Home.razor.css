@@ -1173,3 +1173,98 @@ html[data-theme="dark"] .status.processing {
         transition: none;
     }
 }
+
+
+/* Clear repository access and more legible action controls */
+.repo-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 34px;
+    padding: 7px 10px;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    background: #fff;
+    color: #454545;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: border-color .15s, background .15s, color .15s;
+}
+.repo-link:hover {
+    border-color: transparent;
+    background: linear-gradient(#fff, #fff) padding-box, var(--brand-gradient) border-box;
+    color: #262626;
+}
+.repo-link:focus-visible {
+    outline: 2px solid rgba(193, 53, 132, .45);
+    outline-offset: 3px;
+}
+.repo-link > span {
+    font-size: 15px;
+    line-height: 1;
+}
+.footer-repo-link {
+    min-height: 32px;
+    padding: 6px 9px;
+    font-size: 12px;
+}
+
+.download,
+.apply {
+    min-height: 44px;
+    padding: 12px 17px;
+    font-size: 14px;
+    font-weight: 650;
+    line-height: 1.2;
+    letter-spacing: normal;
+}
+.batch-download {
+    min-height: 42px;
+    padding: 11px 15px;
+}
+.subtle-button {
+    min-height: 40px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.25;
+}
+.browse-action {
+    min-height: 40px;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 650;
+    line-height: 1.25;
+}
+
+/* Use the brand gradient for interaction states, not permanent borders */
+.dropzone:hover,
+.dropzone.dragging {
+    border: 1px solid transparent;
+    border-style: solid;
+    background:
+        radial-gradient(ellipse at 50% 0%, rgba(193, 53, 132, .09), transparent 72%) padding-box,
+        #fffafd padding-box,
+        var(--brand-gradient) border-box;
+    box-shadow: none;
+}
+.batch-item:hover:not(:disabled),
+.batch-item.selected {
+    border-color: transparent;
+    background: linear-gradient(#fffafd, #fffafd) padding-box, var(--brand-gradient) border-box;
+    box-shadow: none;
+}
+@media (max-width: 520px) {
+    .repo-link {
+        min-height: 32px;
+        padding: 6px 8px;
+        font-size: 12px;
+    }
+    .footer-repo-link {
+        font-size: 12px;
+    }
+}
