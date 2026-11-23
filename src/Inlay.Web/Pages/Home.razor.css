@@ -921,6 +921,20 @@ footer {
     object-fit: contain;
     pointer-events: none;
 }
+.crop-magnifier {
+    position: absolute;
+    z-index: 5;
+    display: none;
+    width: 200px;
+    height: 200px;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    outline: 2px solid #c13584;
+    background: #17151b;
+    box-shadow: 0 5px 22px rgba(0,0,0,.38);
+    pointer-events: none;
+}
+.crop-magnifier.visible { display: block; }
 .crop-selection {
     position: absolute;
     border: 1px solid rgba(255,255,255,.96);
@@ -1119,8 +1133,16 @@ html[data-theme="dark"] .crop-handle {
     display: block;
     height: 100%;
     border-radius: inherit;
-    background: var(--brand-gradient);
     transition: width .18s ease;
+}
+.batch-overall-track {
+    max-width: 100%;
+    height: 8px;
+    border: 1px solid rgba(38, 38, 38, .16);
+    background: #dedede;
+}
+.batch-overall-track > span {
+    background: var(--brand-gradient);
 }
 .batch-item.pending {
     cursor: wait;

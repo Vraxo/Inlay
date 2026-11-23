@@ -96,6 +96,7 @@ public partial class Home : IDisposable
         isDarkTheme = await JS.InvokeAsync<bool>("inlay.toggleTheme");
     }
     private int SuccessfulCount => images.Count(image => image.CropBytes is not null);
+    private int ReadyCount => images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status == DetectionStatus.Extracted);
     private int ReviewCount => images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status != DetectionStatus.Extracted);
     private int FailedCount => images.Count(image => image.Status == BatchStatus.Failed);
     private int CompletedCount => images.Count(image => image.IsComplete);
