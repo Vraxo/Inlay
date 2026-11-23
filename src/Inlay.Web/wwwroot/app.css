@@ -42,3 +42,65 @@ input {
     color: inherit;
     cursor: pointer;
 }
+
+
+html[data-theme="dark"] { color-scheme:dark; background:#000; color:#f5f5f5; }
+html[data-theme="dark"] body { background:#000; color:#f5f5f5; }
+html[data-theme="dark"] .boot { color:#a8a8a8; }
+html[data-theme="dark"] #blazor-error-ui { background:#321b25; color:#ff8eae; }
+html[data-theme="dark"] .shell .topbar { border-bottom-color:#262626; }
+html[data-theme="dark"] .shell .wordmark { color:#f5f5f5; }
+html[data-theme="dark"] .shell .local-note,
+html[data-theme="dark"] .shell .lede,
+html[data-theme="dark"] .shell h1 span,
+html[data-theme="dark"] .shell .reason,
+html[data-theme="dark"] .shell .editor-help,
+html[data-theme="dark"] .shell .panel-heading,
+html[data-theme="dark"] .shell .image-meta,
+html[data-theme="dark"] .shell .empty-preview p,
+html[data-theme="dark"] .shell .muted,
+html[data-theme="dark"] .shell footer,
+html[data-theme="dark"] .shell .batch-summary span { color:#a8a8a8; }
+html[data-theme="dark"] .shell .workspace,
+html[data-theme="dark"] .shell .panel,
+html[data-theme="dark"] .shell .crop-editor,
+html[data-theme="dark"] .shell .detection-notice {
+  border-color:#262626; background:#121212; box-shadow:none;
+}
+html[data-theme="dark"] .shell .dropzone { border-color:#363636; background:#0a0a0a; }
+html[data-theme="dark"] .shell .dropzone:hover { border-color:#c13584; background:#1b1118; }
+html[data-theme="dark"] .shell .dropzone strong,
+html[data-theme="dark"] .shell .batch-summary strong,
+html[data-theme="dark"] .shell .empty-preview strong,
+html[data-theme="dark"] .shell .editor-heading h2,
+html[data-theme="dark"] .shell .active-file-heading h2 { color:#f5f5f5; }
+html[data-theme="dark"] .shell .dropzone > span:last-of-type,
+html[data-theme="dark"] .shell .upload-limit { color:#a8a8a8; }
+html[data-theme="dark"] .shell .upload-icon,
+html[data-theme="dark"] .shell .subtle-button { background:#262626; color:#f5f5f5; }
+html[data-theme="dark"] .shell .subtle-button:hover:not(:disabled) { background:#363636; }
+html[data-theme="dark"] .shell .message { background:#1c1c1c; color:#d6d6d6; }
+html[data-theme="dark"] .shell .message.error { background:#2a171e; color:#ff8eae; }
+html[data-theme="dark"] .shell .image-frame {
+  background-color:#242424;
+  background-image:linear-gradient(45deg,#303030 25%,transparent 25%),linear-gradient(-45deg,#303030 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#303030 75%),linear-gradient(-45deg,transparent 75%,#303030 75%);
+}
+html[data-theme="dark"] .shell .empty-preview > span { color:#737373; }
+html[data-theme="dark"] .shell .crop-fields label { color:#a8a8a8; }
+html[data-theme="dark"] .shell .crop-fields input { border-color:#363636; background:#1c1c1c; color:#f5f5f5; }
+html[data-theme="dark"] .shell .crop-fields input:focus { border-color:#c13584; background:#242424; }
+html[data-theme="dark"] .shell .detection-notice p { color:#b8b8b8; }
+html[data-theme="dark"] .shell .detection-notice.review { border-color:#59451f; background:#211b10; }
+html[data-theme="dark"] .shell .detection-notice.rejected { border-color:#592838; background:#241219; }
+html[data-theme="dark"] .shell .batch-summary { border-bottom-color:#262626; }
+html[data-theme="dark"] .shell .batch-item { border-color:#262626; background:#121212; color:#f5f5f5; }
+html[data-theme="dark"] .shell .batch-item:hover:not(:disabled),
+html[data-theme="dark"] .shell .batch-item.selected { border-color:#c13584; background:#21131c; }
+html[data-theme="dark"] .shell .batch-item-info strong { color:#f5f5f5; }
+html[data-theme="dark"] .shell .batch-item > img,
+html[data-theme="dark"] .shell .batch-placeholder { background:#262626; }
+html[data-theme="dark"] .shell footer { border-top-color:#262626; }
+html[data-theme="dark"] .shell .theme-control { color:#a8a8a8; }
+html[data-theme="dark"] .shell .theme-select { border-color:#363636; background:#1c1c1c; color:#f5f5f5; }
+html[data-theme="dark"] .shell .dropzone.dragging { border-color:#c13584; background:#241521; }
+html[data-theme="dark"] .shell .dropzone.dragging .upload-icon { background:#392039; }
