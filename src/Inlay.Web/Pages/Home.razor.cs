@@ -149,7 +149,6 @@ public partial class Home
 
     private void SelectImage(BatchImage image)
     {
-        SaveActiveImage();
         activeImage = image;
         sourceWidth = image.SourceWidth;
         sourceHeight = image.SourceHeight;
@@ -248,7 +247,6 @@ public partial class Home
 
     private async Task DownloadAll()
     {
-        SaveActiveImage();
         var ready = images.Where(image => image.CropBytes is not null).ToList();
         if (ready.Count == 0)
             return;
