@@ -184,9 +184,9 @@ public sealed class ImageDetector
         double geometry,
         double sharpness,
         double cornerFit) =>
-        boundary * 0.30 +
-        edgeStrength * 0.12 +
-        geometry * 0.20 +
-        sharpness * 0.33 +
+        boundary * 0.10 +
+        edgeStrength * 0.20 +
+        geometry * 0.10 +
+        sharpness * 0.55 +
         cornerFit * 0.05;
 }
