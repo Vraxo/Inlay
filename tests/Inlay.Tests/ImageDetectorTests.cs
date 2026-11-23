@@ -57,8 +57,6 @@ public sealed class ImageDetectorTests
         using var image = new Mat(2400, 1080, MatType.CV_8UC3, new Scalar(85, 85, 85));
         var photo = new Rect(33, 693, 1008, 1014);
         Cv2.Rectangle(image, photo, new Scalar(125, 125, 125), -1);
-        Cv2.Rectangle(image, photo, new Scalar(155, 155, 155), 3);
-
         var random = new Random(23);
         for (var y = photo.Top + 24; y < photo.Bottom - 24; y += 18)
         {
