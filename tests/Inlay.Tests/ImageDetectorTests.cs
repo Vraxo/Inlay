@@ -131,7 +131,6 @@ public sealed class ImageDetectorTests
         Assert.Equal(DetectionStatus.Review, result.Status);
         Assert.NotNull(result.Best);
         Assert.NotNull(result.Second);
-        Assert.NotNull(result.Best);
     }
 
     private static void DrawTexturedForeground(Mat image, Rect bounds, int seed)
