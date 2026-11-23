@@ -41,7 +41,7 @@ internal static class CropRefiner
             return bounds;
 
         var thickness = Math.Max(1, Math.Min(3, bounds.Height / 100));
-        var originalBoundary = MeasureBoundaryContinuity(edges, bounds);
+        var originalBoundary = CandidateScorer.MeasureBoundaryContinuity(edges, bounds);
         var widerCandidates = new List<(Rect Bounds, double Boundary)>();
 
         foreach (var left in peaks)

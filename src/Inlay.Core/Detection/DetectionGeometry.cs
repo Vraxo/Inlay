@@ -14,6 +14,8 @@ internal static class DetectionGeometry
     }
 
     internal static Rect ScaleRect(Rect rect, double scale) => new(
+        (int)Math.Round(rect.X * scale), (int)Math.Round(rect.Y * scale),
+        (int)Math.Round(rect.Width * scale), (int)Math.Round(rect.Height * scale));
 
     internal static Rect ClampRect(Rect rect, int width, int height)
     {
