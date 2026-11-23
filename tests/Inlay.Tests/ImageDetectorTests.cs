@@ -118,6 +118,38 @@ public sealed class ImageDetectorTests
     }
 
     [Fact]
+    public void MultiplePlausibleForegroundsRequireManualReview()
+    {
+        using var image = new Mat(900, 1300, MatType.CV_8UC3, new Scalar(85, 85, 85));
+        var left = new Rect(100, 180, 420, 540);
+        var right = new Rect(780, 180, 420, 540);
+        DrawTexturedForeground(image, left, 47);
+        DrawTexturedForeground(image, right, 47);
+
+        var result = new ImageDetector().Detect(image);
+
+        Assert.Equal(DetectionStatus.Review, result.Status);
+        Assert.NotNull(result.Best);
+        Assert.NotNull(result.Second);
+    }
+
+    private static void DrawTexturedForeground(Mat image, Rect bounds, int seed)
+    {
+        Cv2.Rectangle(image, bounds, new Scalar(125, 125, 125), -1);
+        Cv2.Rectangle(image, bounds, new Scalar(145, 145, 145), 3);
+
+        var random = new Random(seed);
+        for (var y = bounds.Top + 20; y < bounds.Bottom - 20; y += 16)
+        {
+            for (var x = bounds.Left + 20; x < bounds.Right - 20; x += 16)
+            {
+                var shade = (byte)random.Next(105, 150);
+                Cv2.Rectangle(image, new Rect(x, y, 7, 7), new Scalar(shade, shade, shade), -1);
+            }
+        }
+    }
+
+    [Fact]
     public void SofterEdgesCanRecoverALowContrastForegroundBoundary()
     {
         using var image = new Mat(900, 900, MatType.CV_8UC3, new Scalar(100, 100, 100));
