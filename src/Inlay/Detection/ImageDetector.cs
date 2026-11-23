@@ -303,19 +303,20 @@ public sealed class ImageDetector
             }
         }
 
-        return (bestRow, bestStrength);
+        var originalStrength = CountEdges(edges, new Rect(x, currentRow, width, 1)) / (double)width;
+        return (bestRow, bestStrength, originalStrength);
     }
 
-    private static bool ShouldUseNearbyEdge((int Row, double Strength) candidate, int originalRow)
+    private static bool ShouldUseNearbyEdge(
+        (int Row, double Strength, double OriginalStrength) candidate, int originalRow)
     {
         if (candidate.Row == originalRow || candidate.Strength < 0.025)
             return false;
 
         // Require a meaningful local improvement to avoid snapping to text or
         // unrelated image detail near a soft outer edge.
-        var originalStrengthFloor = 0.005;
-        return candidate.Strength >= originalStrengthFloor &&
-               candidate.Strength > 0.025;
+        return candidate.Strength - candidate.OriginalStrength >= 0.015 &&
+               candidate.Strength >= candidate.OriginalStrength * 1.2;
     }
 
     private static double MeasureRectangleGeometry(Mat edges, Rect rect, int tolerance)
