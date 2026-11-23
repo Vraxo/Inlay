@@ -210,3 +210,40 @@ html[data-theme="dark"] .shell .theme-toggle:hover {
     background: linear-gradient(#292929, #292929) padding-box, var(--brand-gradient-hover) border-box;
     color: #fff;
 }
+
+
+/* Keep the upload area's brand gradient visible at rest, not as a hover-only effect. */
+.shell .dropzone,
+.shell .dropzone:hover,
+.shell .dropzone.dragging {
+    border: 1px solid transparent;
+    border-style: solid;
+    background:
+        linear-gradient(#fff, #fff) padding-box,
+        var(--brand-gradient) border-box;
+    box-shadow: none;
+}
+
+.shell .dropzone:hover,
+.shell .dropzone.dragging {
+    background:
+        linear-gradient(#fffafd, #fffafd) padding-box,
+        var(--brand-gradient-hover) border-box;
+}
+
+html[data-theme="dark"] .shell .dropzone,
+html[data-theme="dark"] .shell .dropzone:hover,
+html[data-theme="dark"] .shell .dropzone.dragging {
+    border-color: transparent;
+    background:
+        linear-gradient(#242424, #242424) padding-box,
+        var(--brand-gradient) border-box;
+    box-shadow: none;
+}
+
+html[data-theme="dark"] .shell .dropzone:hover,
+html[data-theme="dark"] .shell .dropzone.dragging {
+    background:
+        linear-gradient(#292429, #292429) padding-box,
+        var(--brand-gradient-hover) border-box;
+}
