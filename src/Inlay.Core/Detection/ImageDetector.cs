@@ -160,36 +160,4 @@ public sealed class ImageDetector
 
         return new DetectionResult(DetectionStatus.Extracted, best, second,
             "Candidate passed the initial heuristic thresholds.");
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        (int)Math.Round(rect.X * scale), (int)Math.Round(rect.Y * scale),
-        (int)Math.Round(rect.Width * scale), (int)Math.Round(rect.Height * scale));
-
-
-
-
-}
+    }}
