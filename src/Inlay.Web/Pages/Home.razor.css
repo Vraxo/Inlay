@@ -881,10 +881,6 @@ footer {
     box-shadow: 0 4px 13px rgba(193, 53, 132, .18);
     transition: transform .15s ease, filter .15s ease;
 }
-.browse-action > span {
-    font-size: 14px;
-    line-height: 1;
-}
 .dropzone:hover .browse-action {
     filter: brightness(1.06);
     transform: translateY(-1px);
