@@ -120,10 +120,10 @@
                         <span class="file-name">@activeImage.FileName</span>
                     </div>
                     <div class="image-frame crop-edit-frame">
-                        <div class="crop-stage" @ref="cropStage">
-                            <img @ref="sourceImageElement" src="@activeImage.SourcePreview" alt="Original screenshot with draggable crop selection" draggable="false" />
-                            <canvas class="crop-magnifier" width="200" height="200" aria-hidden="true"></canvas>
-                            <div class="crop-selection" @ref="cropSelection" role="group" aria-label="Crop selection. Drag to move; use the handles to resize." tabindex="0">
+                        <div class="crop-viewport">
+                            <div class="crop-stage" @ref="cropStage">
+                                <img @ref="sourceImageElement" src="@activeImage.SourcePreview" alt="Original screenshot with draggable crop selection" draggable="false" />
+                                <div class="crop-selection" @ref="cropSelection" role="group" aria-label="Crop selection. Drag to move; use the handles to resize." tabindex="0">
                                 <button type="button" class="crop-handle handle-n" data-handle="n" aria-label="Resize from top edge"></button>
                                 <button type="button" class="crop-handle handle-e" data-handle="e" aria-label="Resize from right edge"></button>
                                 <button type="button" class="crop-handle handle-s" data-handle="s" aria-label="Resize from bottom edge"></button>
@@ -132,6 +132,16 @@
                                 <button type="button" class="crop-handle handle-ne" data-handle="ne" aria-label="Resize from top-right corner"></button>
                                 <button type="button" class="crop-handle handle-sw" data-handle="sw" aria-label="Resize from bottom-left corner"></button>
                                 <button type="button" class="crop-handle handle-se" data-handle="se" aria-label="Resize from bottom-right corner"></button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="crop-zoom-toolbar" role="group" aria-label="Canvas zoom">
+                            <span>Scroll to zoom · Space + drag to pan</span>
+                            <div class="crop-zoom-presets">
+                                <button type="button" data-zoom="fit" aria-pressed="true">Fit</button>
+                                <button type="button" data-zoom="1">1:1</button>
+                                <button type="button" data-zoom="2">2:1</button>
+                                <button type="button" data-zoom="4">4:1</button>
                             </div>
                         </div>
                     </div>
