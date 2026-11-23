@@ -121,7 +121,7 @@ public sealed class ImageDetector
         Cv2.Canny(sourceBlurred, sourceStrongEdges, 55, 145);
         Cv2.Canny(sourceBlurred, sourceSoftEdges, 25, 75);
         Cv2.BitwiseOr(sourceStrongEdges, sourceSoftEdges, sourceEdges);
-        finalBounds = RefineVerticalBounds(sourceEdges, finalBounds, 2);
+        finalBounds = RefineVerticalBounds(sourceEdges, finalBounds, 4);
 
         // Confidence must describe the final source-resolution rectangle.
         // Boundary support is measured with a small pixel tolerance so a
