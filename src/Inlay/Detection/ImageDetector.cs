@@ -109,6 +109,20 @@ public sealed class ImageDetector
         var refinedBounds = ScaleRect(refinedAnalysisBounds, 1.0 / scale);
         var finalBounds = new Rect(refinedBounds.X, best.Bounds.Y, refinedBounds.Width, best.Bounds.Height);
 
+        // Recheck only the top edge at source resolution. The analysis image
+        // is downscaled, so a one-pixel correction can be lost during scaling.
+        using var sourceGray = new Mat();
+        using var sourceBlurred = new Mat();
+        using var sourceStrongEdges = new Mat();
+        using var sourceSoftEdges = new Mat();
+        using var sourceEdges = new Mat();
+        Cv2.CvtColor(source, sourceGray, ColorConversionCodes.BGR2GRAY);
+        Cv2.GaussianBlur(sourceGray, sourceBlurred, new Size(3, 3), 0);
+        Cv2.Canny(sourceBlurred, sourceStrongEdges, 55, 145);
+        Cv2.Canny(sourceBlurred, sourceSoftEdges, 25, 75);
+        Cv2.BitwiseOr(sourceStrongEdges, sourceSoftEdges, sourceEdges);
+        finalBounds = RefineTopBoundary(sourceEdges, finalBounds, 4);
+
         // Confidence must describe the rectangle shown to the user, not the
         // original contour that was used to discover its vertical position.
         var finalBoundary = MeasureBoundaryContinuity(edges, refinedAnalysisBounds);
@@ -238,6 +252,44 @@ public sealed class ImageDetector
             .FirstOrDefault();
 
         return wider.Bounds.Width > 0 ? wider.Bounds : bounds;
+    }
+
+    private static Rect RefineTopBoundary(Mat edges, Rect bounds, int searchRadius)
+    {
+        var horizontalInset = Math.Max(2, bounds.Width / 10);
+        var lineX = bounds.X + horizontalInset;
+        var lineWidth = bounds.Width - horizontalInset * 2;
+        if (lineWidth < 20 || bounds.Height < 20)
+            return bounds;
+
+        var originalStrength = CountEdges(edges, new Rect(lineX, bounds.Y, lineWidth, 1)) /
+                               (double)lineWidth;
+        var bestY = bounds.Y;
+        var bestStrength = originalStrength;
+
+        // The currently observed error is an over-high top edge. Search only
+        // below it, and only a few source pixels, to avoid unrelated lines.
+        for (var offset = 1; offset <= searchRadius; offset++)
+        {
+            var candidateY = bounds.Y + offset;
+            if (candidateY >= edges.Height)
+                break;
+
+            var strength = CountEdges(edges, new Rect(lineX, candidateY, lineWidth, 1)) /
+                           (double)lineWidth;
+            if (strength > bestStrength)
+            {
+                bestY = candidateY;
+                bestStrength = strength;
+            }
+        }
+
+        var meaningfulImprovement = bestStrength - originalStrength >= 0.04 &&
+                                    bestStrength >= originalStrength * 1.5 &&
+                                    bestStrength >= 0.05;
+        return bestY != bounds.Y && meaningfulImprovement
+            ? new Rect(bounds.X, bestY, bounds.Width, bounds.Height)
+            : bounds;
     }
 
     private static double MeasureRectangleGeometry(Mat edges, Rect rect)
