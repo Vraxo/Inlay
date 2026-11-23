@@ -1296,3 +1296,25 @@ html[data-theme="dark"] .status.processing {
     position: relative;
     z-index: 1;
 }
+
+
+/* Give hover a clear response without replacing the gradient with a solid fill. */
+.dropzone::after {
+    transition: padding .16s ease, filter .16s ease;
+}
+
+.dropzone:hover {
+    background: linear-gradient(rgba(193, 53, 132, .045), rgba(247, 119, 55, .035)) !important;
+    box-shadow: 0 4px 18px rgba(193, 53, 132, .08);
+}
+
+.dropzone:hover::after {
+    padding: 2.5px;
+    filter: saturate(1.18) brightness(1.05);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dropzone::after {
+        transition: none;
+    }
+}
