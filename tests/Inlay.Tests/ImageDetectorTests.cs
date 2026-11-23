@@ -54,6 +54,36 @@ public sealed class ImageDetectorTests
     }
 
     [Fact]
+    public void PortraitCropKeepsPixelAccurateTopAndBottomEdges()
+    {
+        using var image = new Mat(2400, 1080, MatType.CV_8UC3, new Scalar(85, 85, 85));
+        var photo = new Rect(33, 693, 1008, 1014);
+        Cv2.Rectangle(image, photo, new Scalar(125, 125, 125), -1);
+        Cv2.Rectangle(image, photo, new Scalar(155, 155, 155), 3);
+
+        var random = new Random(23);
+        for (var y = photo.Top + 24; y < photo.Bottom - 24; y += 18)
+        {
+            for (var x = photo.Left + 24; x < photo.Right - 24; x += 18)
+            {
+                var shade = (byte)random.Next(105, 150);
+                Cv2.Rectangle(image, new Rect(x, y, 7, 7), new Scalar(shade, shade, shade), -1);
+            }
+        }
+
+        var result = new ImageDetector().Detect(image);
+
+        Assert.NotNull(result.Best);
+        Assert.InRange(result.Best!.Bounds.X, 30, 36);
+        Assert.InRange(result.Best.Bounds.Y, 691, 695);
+        Assert.InRange(result.Best.Bounds.Width, 1004, 1012);
+        Assert.InRange(result.Best.Bounds.Height, 1010, 1018);
+        Assert.True(
+            result.Best.Confidence >= DetectionResult.ReviewThreshold,
+            $"Portrait crop scored {result.Best.Confidence:P0}; boundary {result.Best.BoundaryContinuity:P0}, geometry {result.Best.GeometryFit:P0}.");
+    }
+
+    [Fact]
     public void SofterEdgesCanRecoverALowContrastForegroundBoundary()
     {
         using var image = new Mat(900, 900, MatType.CV_8UC3, new Scalar(100, 100, 100));
