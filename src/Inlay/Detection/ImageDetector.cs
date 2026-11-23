@@ -341,7 +341,7 @@ public sealed class ImageDetector
         return Math.Clamp(Math.Min(Math.Min(top, bottom), Math.Min(left, right)) * 2.0, 0, 1);
     }
 
-    private static double MeasureBoundaryContinuity(Mat edges, Rect rect, int tolerance)
+    private static double MeasureBoundaryContinuity(Mat edges, Rect rect, int tolerance = 0)
     {
         var thickness = Math.Max(1, Math.Min(3, Math.Min(rect.Width, rect.Height) / 100));
         var horizontalInset = Math.Max(2, rect.Width / 10);
