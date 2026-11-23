@@ -89,7 +89,17 @@ public sealed class ImageDetectorTests
 
         using var mask = ImageExtractor.CreateRoundedMask(photo.Width, photo.Height, expectedRadius);
         using (var photoRegion = new Mat(image, photo))
-            photoRegion.SetTo(new Scalar(125, 125, 125), mask);
+        {
+            for (var row = 0; row < photo.Height; row++)
+            {
+                for (var column = 0; column < photo.Width; column++)
+                {
+                    var alpha = mask.At<byte>(row, column);
+                    var value = (byte)((85 * (255 - alpha) + 125 * alpha + 127) / 255);
+                    photoRegion.Set(row, column, new Vec3b(value, value, value));
+                }
+            }
+        }
 
         var random = new Random(29);
         for (var y = photo.Top + 80; y < photo.Bottom - 80; y += 20)
