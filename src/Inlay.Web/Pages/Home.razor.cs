@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Text.Json;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
@@ -449,6 +450,91 @@ public partial class Home : IDisposable
 
     private static string CreateDataUrl(byte[] bytes, string contentType) =>
         $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";
+
+    private async Task DownloadDiagnostics()
+    {
+        if (activeImage is null)
+            return;
+
+        var detection = activeImage.Detection;
+        var detectedBounds = detection?.Best?.Bounds;
+        var currentRight = cropX + cropWidth;
+        var currentBottom = cropY + cropHeight;
+
+        var report = new
+        {
+            format = "inlay-diagnostics",
+            version = 1,
+            source = new
+            {
+                width = sourceWidth,
+                height = sourceHeight
+            },
+            detection = new
+            {
+                status = detection?.Status.ToString(),
+                reason = detection?.Reason,
+                automaticThreshold = DetectionResult.AutomaticThreshold,
+                reviewThreshold = DetectionResult.ReviewThreshold,
+                best = CreateCandidateDiagnostics(detection?.Best),
+                second = CreateCandidateDiagnostics(detection?.Second)
+            },
+            currentCrop = new
+            {
+                x = cropX,
+                y = cropY,
+                width = cropWidth,
+                height = cropHeight,
+                right = currentRight,
+                bottom = currentBottom,
+                cornerRadius
+            },
+            adjustmentFromDetected = detectedBounds is { } bounds
+                ? new
+                {
+                    left = cropX - bounds.X,
+                    top = cropY - bounds.Y,
+                    right = currentRight - bounds.Right,
+                    bottom = currentBottom - bounds.Bottom
+                }
+                : null
+        };
+
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            WriteIndented = true
+        };
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(report, options);
+        await Download(bytes, "inlay-diagnostics.json", "application/json");
+    }
+
+    private static object? CreateCandidateDiagnostics(DetectionCandidate? candidate)
+    {
+        if (candidate is null)
+            return null;
+
+        var bounds = candidate.Bounds;
+        return new
+        {
+            bounds = new
+            {
+                x = bounds.X,
+                y = bounds.Y,
+                width = bounds.Width,
+                height = bounds.Height,
+                right = bounds.Right,
+                bottom = bounds.Bottom
+            },
+            confidence = candidate.Confidence,
+            boundaryContinuity = candidate.BoundaryContinuity,
+            edgeStrength = candidate.EdgeStrength,
+            geometryFit = candidate.GeometryFit,
+            sharpnessContrast = candidate.SharpnessContrast,
+            cornerFit = candidate.CornerFit,
+            cornerRadius = candidate.CornerRadius,
+            areaRatio = candidate.AreaRatio
+        };
+    }
 
     private async Task DownloadCrop()
     {

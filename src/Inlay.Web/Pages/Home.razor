@@ -182,7 +182,10 @@
                         <p class="eyebrow">CROP EDITOR</p>
                         <h2>Fine-tune your selection</h2>
                     </div>
-                    <button class="subtle-button" @onclick="UseDetectionBounds" disabled="@(activeImage.Detection?.Best is null)">Reset to detection</button>
+                    <div class="editor-heading-actions">
+                        <button class="subtle-button" @onclick="UseDetectionBounds" disabled="@(activeImage.Detection?.Best is null)">Reset to detection</button>
+                        <button class="subtle-button" @onclick="DownloadDiagnostics" title="Exports metadata only. The image and filename are never included.">Export diagnostics</button>
+                    </div>
                 </div>
                 <p class="editor-help">Drag inside the rectangle to move it. Pull an edge or corner handle to resize. Changes appear in the preview as you drag.</p>
                 <label class="radius-control">
