@@ -8,7 +8,17 @@
             <span class="mark"><i></i><i></i><i></i><i></i></span>
             <span>inlay</span>
         </a>
-        <span class="local-note"><span></span> Runs on your device</span>
+        <div class="header-actions">
+            <span class="local-note"><span></span> Runs on your device</span>
+            <label class="theme-control">
+                <span>Theme</span>
+                <select class="theme-select" aria-label="Color theme" value="@themePreference" @onchange="ChangeTheme">
+                    <option value="system">System</option>
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                </select>
+            </label>
+        </div>
     </header>
 
     <section class="intro">
