@@ -752,24 +752,68 @@ footer {
 
 
 
-/* Keep the primary action close to the top of the page. */
+/* Compact, readable type system */
+.shell {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    letter-spacing: normal;
+}
 .topbar {
     height: 60px;
+}
+.wordmark {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: normal;
+}
+.local-note, .theme-control {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: normal;
 }
 .intro {
     max-width: 760px;
     padding: 30px 0 24px;
 }
 .intro h1 {
+    max-width: 760px;
     margin: 0 0 8px;
     font-size: clamp(30px, 4vw, 42px);
-    line-height: 1.12;
-    letter-spacing: -.045em;
+    font-weight: 650;
+    line-height: 1.15;
+    letter-spacing: normal;
+    text-wrap: balance;
 }
 .intro .lede {
-    max-width: 620px;
+    max-width: 600px;
     font-size: 14px;
-    line-height: 1.55;
+    font-weight: 400;
+    line-height: 1.6;
+    letter-spacing: normal;
+}
+.eyebrow, .panel-heading {
+    letter-spacing: .08em;
+}
+.dropzone strong,
+.batch-summary strong,
+.batch-item-info strong,
+.detection-notice strong,
+.empty-preview strong,
+.active-file-heading h2,
+.editor-heading h2,
+.apply, .subtle-button, .download,
+.crop-fields label,
+footer {
+    letter-spacing: normal;
+}
+.active-file-heading h2,
+.editor-heading h2 {
+    font-weight: 650;
+}
+.image-meta,
+.crop-fields input {
+    font-variant-numeric: tabular-nums;
 }
 @media (max-width: 700px) {
     .topbar {
@@ -780,100 +824,8 @@ footer {
     }
     .intro h1 {
         font-size: clamp(28px, 7.5vw, 36px);
-        line-height: 1.12;
-        letter-spacing: -.04em;
-    }
-    .intro .lede {
-        font-size: 13px;
-        line-height: 1.5;
-    }
-}
-
-/* Final typography pass */
-.shell {
-    font-family: "Segoe UI Variable", "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 14px;
-    line-height: 1.5;
-    letter-spacing: -0.01em;
-    font-feature-settings: "ss01" on;
-    text-rendering: optimizeLegibility;
-}
-.wordmark {
-    font-size: 22px;
-    font-weight: 720;
-    letter-spacing: -0.075em;
-}
-.local-note, .theme-control {
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0;
-}
-.intro h1 {
-    max-width: 760px;
-    font-size: clamp(30px, 4vw, 42px);
-    font-weight: 680;
-    line-height: 1.12;
-    letter-spacing: -0.055em;
-    text-wrap: balance;
-}
-.intro .lede {
-    max-width: 600px;
-    font-size: 14px;
-    font-weight: 400;
-    line-height: 1.6;
-    letter-spacing: -0.012em;
-}
-.dropzone strong {
-    font-size: 14px;
-    font-weight: 650;
-    letter-spacing: -0.025em;
-}
-.batch-summary strong,
-.batch-item-info strong,
-.detection-notice strong,
-.empty-preview strong {
-    font-weight: 620;
-    letter-spacing: -0.025em;
-}
-.batch-summary span,
-.batch-item-info small,
-.batch-error,
-.editor-help,
-.empty-preview p,
-.detection-notice p {
-    letter-spacing: -0.005em;
-}
-.active-file-heading h2,
-.editor-heading h2 {
-    font-weight: 640;
-    letter-spacing: -0.04em;
-}
-.panel-heading {
-    font-size: 10px;
-    font-weight: 650;
-    letter-spacing: .075em;
-}
-.image-meta,
-.crop-fields input {
-    font-variant-numeric: tabular-nums;
-    font-feature-settings: "tnum";
-}
-.crop-fields label {
-    font-weight: 550;
-    letter-spacing: -.01em;
-}
-.apply, .subtle-button, .download {
-    font-family: inherit;
-    font-weight: 650;
-    letter-spacing: -0.02em;
-}
-footer {
-    letter-spacing: -.005em;
-}
-@media (max-width: 700px) {
-    .intro h1 {
-        font-size: clamp(28px, 7.5vw, 36px);
-        letter-spacing: -.05em;
+        line-height: 1.15;
+        letter-spacing: normal;
     }
     .intro .lede {
         font-size: 13px;
