@@ -49,7 +49,7 @@ public sealed class ImageDetectorTests
         Assert.InRange(result.Best.Bounds.Height, 1170, 1230);
         Assert.True(
             result.Best.Confidence >= DetectionResult.ReviewThreshold,
-            $"A clearly bordered final crop should pass review confidence, but scored {result.Best.Confidence:P0}.");
+            $"Final score {result.Best.Confidence:P0}; boundary {result.Best.BoundaryContinuity:P0}, edge {result.Best.EdgeStrength:P0}, geometry {result.Best.GeometryFit:P0}, sharpness {result.Best.SharpnessContrast:P0}, corner {result.Best.CornerFit:P0}, area {result.Best.AreaRatio:P0}.");
         Assert.True(result.Best.GeometryFit >= 0.9);
     }
 
