@@ -396,6 +396,7 @@ public partial class Home : IDisposable
             activeImage.CropBytes = CreateCrop(activeImage, cropX, cropY, cropWidth, cropHeight, cornerRadius);
             activeImage.ThumbnailPreview = CreateThumbnail(activeImage.CropBytes);
             SaveActiveImage();
+            cropEditorNeedsInitialization = true;
         }
         catch (Exception exception)
         {
