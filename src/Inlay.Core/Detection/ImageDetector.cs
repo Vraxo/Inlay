@@ -85,7 +85,10 @@ public sealed class ImageDetector
         var bestMatch = ranked[0];
         var best = bestMatch.Result;
         var analysisBounds = DetectionGeometry.ScaleRect(best.Bounds, scale);
-        var refinedAnalysisBounds = CropRefiner.RefineHorizontalBounds(edges, analysisBounds);
+        var hasUsableBoundaries = best.BoundaryContinuity >= 0.12;
+        var refinedAnalysisBounds = hasUsableBoundaries
+            ? CropRefiner.RefineHorizontalBounds(edges, analysisBounds)
+            : analysisBounds;
         var refinedBounds = DetectionGeometry.ScaleRect(refinedAnalysisBounds, 1.0 / scale);
         var finalBounds = new Rect(refinedBounds.X, best.Bounds.Y, refinedBounds.Width, best.Bounds.Height);
 
@@ -99,10 +102,14 @@ public sealed class ImageDetector
         Cv2.Canny(sourceBlurred, sourceStrongEdges, 55, 145);
         Cv2.Canny(sourceBlurred, sourceSoftEdges, 25, 75);
         Cv2.BitwiseOr(sourceStrongEdges, sourceSoftEdges, sourceEdges);
-        finalBounds = CropRefiner.RefineTopBoundary(sourceEdges, finalBounds, 4);
-        finalBounds = CropRefiner.RefineBottomBoundary(sourceEdges, finalBounds, 6);
+        var finalCornerRadius = 0;
+        if (hasUsableBoundaries)
+        {
+            finalBounds = CropRefiner.RefineTopBoundary(sourceEdges, finalBounds, 4);
+            finalBounds = CropRefiner.RefineBottomBoundary(sourceEdges, finalBounds, 6);
+            finalCornerRadius = CornerRadiusEstimator.EstimateCornerRadius(sourceEdges, finalBounds);
+        }
 
-        var finalCornerRadius = CornerRadiusEstimator.EstimateCornerRadius(sourceEdges, finalBounds);
         var finalCornerFit = finalCornerRadius > 0 ? 0.85 : 0.65;
         var finalBoundary = CandidateScorer.MeasureBoundaryContinuity(edges, refinedAnalysisBounds);
         var finalEdgeStrength = CandidateScorer.MeasureEdgeStrength(gray, refinedAnalysisBounds);
@@ -126,7 +133,7 @@ public sealed class ImageDetector
         };
 
         var second = ranked.Length > 1 ? ranked[1].Result : null;
-        var margin = second is null ? 1.0 : best.Confidence - second.Confidence;
+        var margin = second is null ? 1.0 : bestMatch.Result.Confidence - second.Confidence;
         if (best.Confidence < DetectionResult.ReviewThreshold && (second is null || margin >= 0.08))
             return new DetectionResult(DetectionStatus.Rejected, best, second,
                 "A possible foreground region was found, but its evidence is too weak for a reliable crop.");
