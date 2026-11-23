@@ -329,6 +329,13 @@ footer {
     justify-content: space-between;
     gap: 16px;
 }
+.editor-heading-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
 .editor-heading .eyebrow {
     margin: 0 0 7px;
 }
@@ -421,6 +428,9 @@ footer {
     .editor-heading {
         align-items: flex-start;
         flex-direction: column;
+    }
+    .editor-heading-actions {
+        width: 100%;
     }
     .crop-fields {
         grid-template-columns: repeat(2, minmax(0, 1fr));
