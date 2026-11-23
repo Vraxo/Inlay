@@ -27,3 +27,20 @@ jobs:
       - run: dotnet build
 
       - run: dotnet test --no-build
+
+      - name: Cache WebAssembly workload
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.DOTNET_ROOT }}/packs
+            ${{ env.DOTNET_ROOT }}/sdk-manifests
+            ${{ env.DOTNET_ROOT }}/metadata/workloads
+          key: ${{ runner.os }}-dotnet11-wasm-tools-v1
+          restore-keys: |
+            ${{ runner.os }}-dotnet11-wasm-tools-
+
+      - name: Install WebAssembly tools
+        run: dotnet workload install wasm-tools
+
+      - name: Build browser app
+        run: dotnet build src/Inlay.Web/Inlay.Web.csproj --configuration Release -p:WasmBuildNative=false -p:WasmEnableSIMD=true -p:WasmEnableExceptionHandling=true

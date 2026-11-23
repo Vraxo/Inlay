@@ -98,35 +98,42 @@
             <div class="results">
                 <div class="panel">
                     <div class="panel-heading">
-                        <span>01 / Original</span>
+                        <span>01 / Select crop</span>
                         <span class="file-name">@activeImage.FileName</span>
                     </div>
-                    <div class="image-frame">
-                        <img src="@activeImage.SourcePreview" alt="Original screenshot" />
+                    <div class="image-frame crop-edit-frame">
+                        <div class="crop-stage" @ref="cropStage">
+                            <img @ref="sourceImageElement" src="@activeImage.SourcePreview" alt="Original screenshot with draggable crop selection" draggable="false" />
+                            <div class="crop-selection" @ref="cropSelection" role="group" aria-label="Crop selection. Drag to move; use the handles to resize." tabindex="0">
+                                <button type="button" class="crop-handle handle-n" data-handle="n" aria-label="Resize from top edge"></button>
+                                <button type="button" class="crop-handle handle-e" data-handle="e" aria-label="Resize from right edge"></button>
+                                <button type="button" class="crop-handle handle-s" data-handle="s" aria-label="Resize from bottom edge"></button>
+                                <button type="button" class="crop-handle handle-w" data-handle="w" aria-label="Resize from left edge"></button>
+                                <button type="button" class="crop-handle handle-nw" data-handle="nw" aria-label="Resize from top-left corner"></button>
+                                <button type="button" class="crop-handle handle-ne" data-handle="ne" aria-label="Resize from top-right corner"></button>
+                                <button type="button" class="crop-handle handle-sw" data-handle="sw" aria-label="Resize from bottom-left corner"></button>
+                                <button type="button" class="crop-handle handle-se" data-handle="se" aria-label="Resize from bottom-right corner"></button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="image-meta">@sourceWidth × @sourceHeight px</div>
+                    <div class="image-meta crop-meta">
+                        <span>@sourceWidth × @sourceHeight px original</span>
+                        <span>Drag the box to move it</span>
+                    </div>
                 </div>
 
                 <div class="panel">
                     <div class="panel-heading">
-                        <span>02 / Crop preview</span>
+                        <span>02 / Live crop preview</span>
                         <span class="status @StatusClass">@GetStatusLabel(activeImage)</span>
                     </div>
-                    @if (!string.IsNullOrEmpty(activeImage.CropPreview))
-                    {
-                        <div class="image-frame crop-frame">
-                            <img src="@activeImage.CropPreview" alt="Current crop preview" />
-                        </div>
-                        <div class="image-meta">@cropWidth × @cropHeight px · PNG with transparent corners</div>
-                    }
-                    else
-                    {
-                        <div class="empty-preview">
-                            <span>⌖</span>
-                            <strong>Set a crop rectangle</strong>
-                            <p>@(activeImage.Detection?.Reason ?? "Adjust the coordinates below, then apply your crop.")</p>
-                        </div>
-                    }
+                    <div class="image-frame crop-frame">
+                        <canvas @ref="cropPreviewCanvas" class="crop-preview-canvas" aria-label="Live crop preview"></canvas>
+                    </div>
+                    <div class="image-meta crop-meta">
+                        <span @ref="cropReadout">X @cropX · Y @cropY · @cropWidth × @cropHeight px</span>
+                        <span>Transparent corners</span>
+                    </div>
                 </div>
             </div>
 
@@ -136,17 +143,17 @@
                     @if (activeImage.Detection?.Best is null)
                     {
                         <strong>No automatic crop found</strong>
-                        <p>@(activeImage.Detection?.Reason ?? "Set the crop rectangle manually.") The preview is the entire screenshot until you choose a crop.</p>
+                        <p>@(activeImage.Detection?.Reason ?? "Set the crop rectangle manually.") Drag the selection over the image to define your crop.</p>
                     }
                     else if (activeImage.Detection?.Status == DetectionStatus.Rejected)
                     {
                         <strong>Possible crop found, but confidence is too low</strong>
-                        <p>@activeImage.Detection.Reason Check the suggested rectangle below and adjust it before downloading.</p>
+                        <p>@activeImage.Detection.Reason Check the suggested rectangle and adjust its edges if they do not line up.</p>
                     }
                     else
                     {
                         <strong>Possible crop found — please review it</strong>
-                        <p>@activeImage.Detection.Reason Check the suggested rectangle below and adjust it if the edges do not line up.</p>
+                        <p>@(activeImage.Detection?.Reason ?? "Review the suggested rectangle and adjust it if the edges do not line up.")</p>
                     }
                 </div>
             }
@@ -159,22 +166,19 @@
                     </div>
                     <button class="subtle-button" @onclick="UseDetectionBounds" disabled="@(activeImage.Detection?.Best is null)">Reset to detection</button>
                 </div>
-                <p class="editor-help">Adjust the rectangle in source-image pixels. The crop must stay inside the original image.</p>
-                <div class="crop-fields">
-                    <label>X <input type="number" min="0" max="@Math.Max(0, sourceWidth - 1)" @bind="cropX" /></label>
-                    <label>Y <input type="number" min="0" max="@Math.Max(0, sourceHeight - 1)" @bind="cropY" /></label>
-                    <label>Width <input type="number" min="1" max="@sourceWidth" @bind="cropWidth" /></label>
-                    <label>Height <input type="number" min="1" max="@sourceHeight" @bind="cropHeight" /></label>
-                    <label>Corner radius <input type="number" min="0" max="@(Math.Min(cropWidth, cropHeight) / 2)" @bind="cornerRadius" /></label>
-                </div>
-                <div class="editor-actions">
-                    <span class="editor-validation">@validationMessage</span>
-                    <button class="apply" @onclick="ApplyCrop">Update preview <span>↗</span></button>
-                </div>
+                <p class="editor-help">Drag inside the rectangle to move it. Pull an edge or corner handle to resize. Changes appear in the preview as you drag.</p>
+                <label class="radius-control">
+                    <span>Corner radius <strong>@cornerRadius px</strong></span>
+                    <input @ref="cornerRadiusSlider" type="range" min="0" max="@(Math.Min(cropWidth, cropHeight) / 2)" value="@cornerRadius" />
+                </label>
+                @if (!string.IsNullOrEmpty(validationMessage))
+                {
+                    <p class="editor-validation">@validationMessage</p>
+                }
             </section>
 
             <div class="result-footer">
-                <span class="reason">Changes are saved to this image in the batch.</span>
+                <span class="reason">The crop is saved to this image in the batch.</span>
                 <button class="download" @onclick="DownloadCrop" disabled="@(activeImage.CropBytes is null)">Download PNG <span>↓</span></button>
             </div>
         }

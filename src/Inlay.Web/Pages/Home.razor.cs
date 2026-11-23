@@ -8,7 +8,7 @@ using Inlay.Extraction;
 
 namespace Inlay.Web.Pages;
 
-public partial class Home
+public partial class Home : IDisposable
 {
     private const long MaximumFileSize = 25 * 1024 * 1024;
     private const long MaximumBatchSize = 50 * 1024 * 1024;
@@ -28,16 +28,62 @@ public partial class Home
     private int cropWidth;
     private int cropHeight;
     private int cornerRadius;
+    private ElementReference cropStage;
+    private ElementReference sourceImageElement;
+    private ElementReference cropSelection;
+    private ElementReference cropPreviewCanvas;
+    private ElementReference cropReadout;
+    private ElementReference cornerRadiusSlider;
+    private DotNetObjectReference<Home>? cropEditorReference;
 
     private string StatusClass => GetStatusClass(activeImage?.Detection);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender)
+        if (firstRender)
+        {
+            themePreference = await JS.InvokeAsync<string>("inlay.getThemePreference");
+            StateHasChanged();
+        }
+
+        if (activeImage is null || cropWidth <= 0 || cropHeight <= 0)
             return;
 
-        themePreference = await JS.InvokeAsync<string>("inlay.getThemePreference");
+        cropEditorReference ??= DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync(
+            "inlayCropEditor.initialize",
+            cropStage,
+            sourceImageElement,
+            cropSelection,
+            cropPreviewCanvas,
+            cropReadout,
+            cornerRadiusSlider,
+            cropEditorReference,
+            sourceWidth,
+            sourceHeight,
+            cropX,
+            cropY,
+            cropWidth,
+            cropHeight,
+            cornerRadius);
+    }
+
+    [JSInvokable]
+    public Task CommitCropFromEditor(int x, int y, int width, int height, int radius)
+    {
+        cropX = x;
+        cropY = y;
+        cropWidth = width;
+        cropHeight = height;
+        cornerRadius = radius;
+        ApplyCrop();
         StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        cropEditorReference?.Dispose();
     }
 
     private async Task ChangeTheme(ChangeEventArgs args)
