@@ -247,3 +247,8 @@ html[data-theme="dark"] .shell .dropzone.dragging {
         linear-gradient(#292429, #292429) padding-box,
         var(--brand-gradient-hover) border-box;
 }
+
+html[data-theme="dark"] .shell .batch-overall-track {
+    border-color: #505050;
+    background: #383838;
+}
