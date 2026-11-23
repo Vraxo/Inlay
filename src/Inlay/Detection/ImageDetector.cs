@@ -109,6 +109,20 @@ public sealed class ImageDetector
         var refinedBounds = ScaleRect(refinedAnalysisBounds, 1.0 / scale);
         var finalBounds = new Rect(refinedBounds.X, best.Bounds.Y, refinedBounds.Width, best.Bounds.Height);
 
+        // Recheck only the top edge at source resolution. The analysis image
+        // is downscaled, so a one-pixel correction can be lost during scaling.
+        using var sourceGray = new Mat();
+        using var sourceBlurred = new Mat();
+        using var sourceStrongEdges = new Mat();
+        using var sourceSoftEdges = new Mat();
+        using var sourceEdges = new Mat();
+        Cv2.CvtColor(source, sourceGray, ColorConversionCodes.BGR2GRAY);
+        Cv2.GaussianBlur(sourceGray, sourceBlurred, new Size(3, 3), 0);
+        Cv2.Canny(sourceBlurred, sourceStrongEdges, 55, 145);
+        Cv2.Canny(sourceBlurred, sourceSoftEdges, 25, 75);
+        Cv2.BitwiseOr(sourceStrongEdges, sourceSoftEdges, sourceEdges);
+        finalBounds = RefineTopBoundary(sourceEdges, finalBounds, 4);
+
         // Confidence must describe the rectangle shown to the user, not the
         // original contour that was used to discover its vertical position.
         var finalBoundary = MeasureBoundaryContinuity(edges, refinedAnalysisBounds);
@@ -238,6 +252,40 @@ public sealed class ImageDetector
             .FirstOrDefault();
 
         return wider.Bounds.Width > 0 ? wider.Bounds : bounds;
+    }
+
+    private static Rect RefineTopBoundary(Mat edges, Rect bounds, int searchRadius)
+    {
+        var horizontalInset = Math.Max(2, bounds.Width / 10);
+        var lineX = bounds.X + horizontalInset;
+        var lineWidth = bounds.Width - horizontalInset * 2;
+        if (lineWidth < 20 || bounds.Height < 20)
+            return bounds;
+
+        // Canny locates the transition on the final background row. The crop
+        // begins on the following row, so convert edge rows to pixel bounds.
+        var firstEdgeRow = Math.Max(0, bounds.Y - searchRadius - 1);
+        var lastEdgeRow = Math.Min(edges.Height - 1, bounds.Y + searchRadius - 1);
+        var bestEdgeRow = bounds.Y - 1;
+        var bestStrength = bestEdgeRow >= 0
+            ? CountEdges(edges, new Rect(lineX, bestEdgeRow, lineWidth, 1)) / (double)lineWidth
+            : 0;
+
+        for (var row = firstEdgeRow; row <= lastEdgeRow; row++)
+        {
+            var strength = CountEdges(edges, new Rect(lineX, row, lineWidth, 1)) /
+                           (double)lineWidth;
+            if (strength > bestStrength)
+            {
+                bestEdgeRow = row;
+                bestStrength = strength;
+            }
+        }
+
+        var refinedY = bestEdgeRow + 1;
+        return bestStrength >= 0.05 && refinedY != bounds.Y
+            ? new Rect(bounds.X, refinedY, bounds.Width, bounds.Height)
+            : bounds;
     }
 
     private static double MeasureRectangleGeometry(Mat edges, Rect rect)
