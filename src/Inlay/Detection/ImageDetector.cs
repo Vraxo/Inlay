@@ -280,7 +280,7 @@ public sealed class ImageDetector
         return new Rect(bounds.X, topY, bounds.Width, bottomY - topY + 1);
     }
 
-    private static (int Row, double Strength) FindBestHorizontalEdge(
+    private static (int Row, double Strength, double OriginalStrength) FindBestHorizontalEdge(
         Mat edges, int x, int row, int width, int searchRadius)
     {
         var currentRow = Math.Clamp(row, 0, edges.Height - 1);
