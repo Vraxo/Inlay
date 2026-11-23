@@ -136,12 +136,13 @@ public sealed class ImageDetectorTests
     [Fact]
     public void FindsSharpForegroundOverBlurredBackgroundWithoutVisibleBorder()
     {
-        using var background = new Mat(900, 900, MatType.CV_8UC3, new Scalar(90, 90, 90));
+        const int imageSize = 900;
+        using var background = new Mat(imageSize, imageSize, MatType.CV_8UC3, new Scalar(90, 90, 90));
         var random = new Random(113);
 
-        for (var y = 0; y < background.Height; y += 5)
+        for (var y = 0; y < imageSize; y += 5)
         {
-            for (var x = 0; x < background.Width; x += 5)
+            for (var x = 0; x < imageSize; x += 5)
             {
                 var shade = (byte)random.Next(55, 145);
                 Cv2.Rectangle(background, new Rect(x, y, 3, 3), new Scalar(shade, shade, shade), -1);
