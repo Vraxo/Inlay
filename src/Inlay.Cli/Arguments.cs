@@ -43,6 +43,26 @@ public static class Arguments
         };
 
         var command = new RootCommand("Extract a foreground image from a screenshot");
+        var benchmarkCommand = new Command("benchmark", "Measure detector accuracy against a local labelled image set");
+        var manifestArgument = new Argument<string>("manifest")
+        {
+            Description = "JSON manifest with image paths and expected crop rectangles"
+        };
+        benchmarkCommand.Arguments.Add(manifestArgument);
+        benchmarkCommand.SetAction(parseResult =>
+        {
+            try
+            {
+                return BenchmarkRunner.Run(parseResult.GetValue(manifestArgument)!);
+            }
+            catch (Exception exception)
+            {
+                Console.Error.WriteLine($"inlay benchmark: {exception.Message}");
+                return 2;
+            }
+        });
+        command.Subcommands.Add(benchmarkCommand);
+
         command.Arguments.Add(inputArgument);
         command.Options.Add(outputOption);
         command.Options.Add(recursiveOption);
