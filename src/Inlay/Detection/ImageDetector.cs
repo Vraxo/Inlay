@@ -433,7 +433,7 @@ public sealed class ImageDetector
             }
 
             var strongestCoverage = scores.Max(score => score.Coverage);
-            if (strongestCoverage < 0.60)
+            if (strongestCoverage < 0.72)
                 continue;
 
             // A few adjacent radii can score equally because edges are rasterized.
