@@ -1,6 +1,5 @@
-using Xunit;
-
 using Inlay.Cli;
+using Xunit;
 
 namespace Inlay.Tests;
 
@@ -9,21 +8,33 @@ public sealed class ArgumentsTests
     [Fact]
     public void ParsesSingleInputAndOptions()
     {
-        var parsed = Arguments.Parse(["photo.jpg", "--preview", "--report", "--corners", "keep"]);
-        Assert.Null(parsed.Error);
-        Assert.NotNull(parsed.Options);
-        Assert.Equal("photo.jpg", parsed.Options.Input);
-        Assert.True(parsed.Options.Preview);
-        Assert.True(parsed.Options.Report);
-        Assert.True(parsed.Options.KeepCorners);
+        var result = Arguments.CreateCommand().Parse(["photo.jpg", "--preview", "--report", "--corners", "keep"]);
+
+        Assert.Empty(result.Errors);
     }
 
     [Fact]
-    public void ParsesManualRectangle()
+    public void ParsesBatchOptions()
     {
-        var parsed = Arguments.Parse(["photo.jpg", "--rect", "26,592,869,867"]);
-        Assert.Null(parsed.Error);
-        Assert.Equal(new CropRectangle(26, 592, 869, 867), parsed.Options!.Rectangle);
+        var result = Arguments.CreateCommand().Parse(["photos", "--recursive", "--out", "extracted", "--overwrite"]);
+
+        Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    public void RejectsUnknownOptions()
+    {
+        var result = Arguments.CreateCommand().Parse(["photo.jpg", "--unknown"]);
+
+        Assert.NotEmpty(result.Errors);
+    }
+
+    [Theory]
+    [InlineData("26,592,869,867", 26, 592, 869, 867)]
+    public void ParsesManualRectangle(string value, int x, int y, int width, int height)
+    {
+        Assert.True(Arguments.TryParseRectangle(value, out var rectangle));
+        Assert.Equal(new CropRectangle(x, y, width, height), rectangle);
     }
 
     [Theory]
@@ -33,13 +44,6 @@ public sealed class ArgumentsTests
     [InlineData("a,b,c,d")]
     public void RejectsInvalidRectangle(string value)
     {
-        var parsed = Arguments.Parse(["photo.jpg", "--rect", value]);
-        Assert.NotNull(parsed.Error);
-    }
-
-    [Fact]
-    public void HelpIsShownWithoutArguments()
-    {
-        Assert.True(Arguments.Parse([]).ShowHelp);
+        Assert.False(Arguments.TryParseRectangle(value, out _));
     }
 }

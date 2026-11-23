@@ -1,3 +1,6 @@
+using System.CommandLine;
+using Inlay.Processing;
+
 namespace Inlay.Cli;
 
 public sealed record CropRectangle(int X, int Y, int Width, int Height);
@@ -12,100 +15,115 @@ public sealed record RunOptions(
     bool Report,
     bool Overwrite);
 
-public sealed record ParsedArguments(bool ShowHelp, string? Error, RunOptions? Options);
-
 public static class Arguments
 {
-    public const string HelpText = """
-        Inlay — extract a foreground image from a screenshot
-
-        Usage:
-          inlay <image>
-          inlay <directory> [--recursive] [--out <directory>]
-
-        Options:
-          --out <path>          Output file (single input) or output directory (batch)
-          --recursive            Include subdirectories
-          --preview              Write a diagnostic JPEG preview
-          --rect x,y,w,h         Use explicit crop coordinates in source pixels
-          --corners auto|keep    Auto-mask rounded corners (default: auto), or keep pixels
-          --report               Write a JSON report beside each output
-          --overwrite            Replace existing output files
-          -h, --help             Show help
-
-        Supported inputs: PNG, JPG/JPEG, WebP
-        Review and rejected detections are never exported as extracted images.
-        """;
-
-    public static ParsedArguments Parse(string[] args)
+    public static RootCommand CreateCommand()
     {
-        if (args.Length == 0 || args.Any(x => x is "-h" or "--help"))
-            return new ParsedArguments(true, null, null);
-
-        string? input = null;
-        string? output = null;
-        var recursive = false;
-        var preview = false;
-        var keepCorners = false;
-        var report = false;
-        var overwrite = false;
-        CropRectangle? rectangle = null;
-
-        for (var i = 0; i < args.Length; i++)
+        var inputArgument = new Argument<string?>("input")
         {
-            var arg = args[i];
-            if (!arg.StartsWith("-", StringComparison.Ordinal))
+            Arity = ArgumentArity.ZeroOrOne,
+            Description = "An image file or directory to process"
+        };
+        var outputOption = new Option<string?>("--out")
+        {
+            Description = "Output file (single input) or output directory (batch)"
+        };
+        var recursiveOption = new Option<bool>("--recursive")
+        {
+            Description = "Include subdirectories"
+        };
+        var previewOption = new Option<bool>("--preview")
+        {
+            Description = "Write a diagnostic JPEG preview"
+        };
+        var rectangleOption = new Option<string?>("--rect")
+        {
+            Description = "Use explicit crop coordinates in source pixels: x,y,width,height"
+        };
+        var cornersOption = new Option<string>("--corners")
+        {
+            DefaultValueFactory = _ => "auto",
+            Description = "Rounded corners: auto (default) or keep"
+        };
+        var reportOption = new Option<bool>("--report")
+        {
+            Description = "Write a JSON report beside each output"
+        };
+        var overwriteOption = new Option<bool>("--overwrite")
+        {
+            Description = "Replace existing output files"
+        };
+
+        var command = new RootCommand("Extract a foreground image from a screenshot");
+        command.Arguments.Add(inputArgument);
+        command.Options.Add(outputOption);
+        command.Options.Add(recursiveOption);
+        command.Options.Add(previewOption);
+        command.Options.Add(rectangleOption);
+        command.Options.Add(cornersOption);
+        command.Options.Add(reportOption);
+        command.Options.Add(overwriteOption);
+
+        command.SetAction(async parseResult =>
+        {
+            var input = parseResult.GetValue(inputArgument);
+            if (string.IsNullOrWhiteSpace(input))
+                return 2;
+
+            var corners = parseResult.GetValue(cornersOption);
+            if (corners is not ("auto" or "keep"))
             {
-                if (input is not null)
-                    return new ParsedArguments(false, "Only one input path may be supplied.", null);
-                input = arg;
-                continue;
+                Console.Error.WriteLine("inlay: --corners must be 'auto' or 'keep'.");
+                return 2;
             }
 
-            string Next()
+            CropRectangle? rectangle = null;
+            var rectangleValue = parseResult.GetValue(rectangleOption);
+            if (rectangleValue is not null && !TryParseRectangle(rectangleValue, out rectangle))
             {
-                if (++i >= args.Length)
-                    throw new ArgumentException($"Option '{arg}' requires a value.");
-                return args[i];
+                Console.Error.WriteLine("inlay: --rect expects non-negative x,y coordinates and positive width,height integers.");
+                return 2;
             }
 
             try
             {
-                switch (arg)
-                {
-                    case "--out": output = Next(); break;
-                    case "--recursive": recursive = true; break;
-                    case "--preview": preview = true; break;
-                    case "--report": report = true; break;
-                    case "--overwrite": overwrite = true; break;
-                    case "--rect":
-                        var parts = Next().Split(',');
-                        if (parts.Length != 4 || !parts.All(p => int.TryParse(p, out _)))
-                            return new ParsedArguments(false, "--rect expects x,y,width,height as integers.", null);
-                        var values = parts.Select(int.Parse).ToArray();
-                        if (values[0] < 0 || values[1] < 0 || values[2] <= 0 || values[3] <= 0)
-                            return new ParsedArguments(false, "--rect coordinates must be non-negative and dimensions positive.", null);
-                        rectangle = new CropRectangle(values[0], values[1], values[2], values[3]);
-                        break;
-                    case "--corners":
-                        var mode = Next();
-                        if (mode is not ("auto" or "keep"))
-                            return new ParsedArguments(false, "--corners must be 'auto' or 'keep'.", null);
-                        keepCorners = mode == "keep";
-                        break;
-                    default: return new ParsedArguments(false, $"Unknown option '{arg}'.", null);
-                }
+                var summary = await new BatchProcessor().RunAsync(new RunOptions(
+                    input,
+                    parseResult.GetValue(outputOption),
+                    parseResult.GetValue(recursiveOption),
+                    parseResult.GetValue(previewOption),
+                    rectangle,
+                    corners == "keep",
+                    parseResult.GetValue(reportOption),
+                    parseResult.GetValue(overwriteOption)));
+
+                Console.WriteLine();
+                Console.WriteLine($"Scanned {summary.Scanned}  |  Extracted {summary.Extracted}  |  Review {summary.Review}  |  Rejected {summary.Rejected}  |  Failed {summary.Failed}");
+                return summary.Failed > 0 || summary.Rejected > 0 || summary.Review > 0 ? 1 : 0;
             }
-            catch (ArgumentException exception)
+            catch (Exception exception)
             {
-                return new ParsedArguments(false, exception.Message, null);
+                Console.Error.WriteLine($"inlay: {exception.Message}");
+                return 2;
             }
-        }
+        });
 
-        if (string.IsNullOrWhiteSpace(input))
-            return new ParsedArguments(false, "An input file or directory is required.", null);
+        return command;
+    }
 
-        return new ParsedArguments(false, null,
-            new RunOptions(input, output, recursive, preview, rectangle, keepCorners, report, overwrite));
+    public static bool TryParseRectangle(string value, out CropRectangle? rectangle)
+    {
+        rectangle = null;
+        var parts = value.Split(',');
+        if (parts.Length != 4 ||
+            !int.TryParse(parts[0], out var x) ||
+            !int.TryParse(parts[1], out var y) ||
+            !int.TryParse(parts[2], out var width) ||
+            !int.TryParse(parts[3], out var height) ||
+            x < 0 || y < 0 || width <= 0 || height <= 0)
+            return false;
+
+        rectangle = new CropRectangle(x, y, width, height);
+        return true;
     }
 }
