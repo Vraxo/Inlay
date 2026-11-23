@@ -126,7 +126,7 @@ public sealed class ImageDetector
 
         var second = ranked.Length > 1 ? ranked[1] : null;
         var margin = second is null ? 1.0 : best.Confidence - second.Confidence;
-        if (best.Confidence < DetectionResult.ReviewThreshold)
+        if (best.Confidence < DetectionResult.ReviewThreshold && (second is null || margin >= 0.08))
             return new DetectionResult(DetectionStatus.Rejected, best, second,
                 "A possible foreground region was found, but its evidence is too weak for a reliable crop.");
         if (best.Confidence < DetectionResult.AutomaticThreshold || margin < 0.08)
