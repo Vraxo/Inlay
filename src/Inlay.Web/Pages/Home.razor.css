@@ -1080,3 +1080,96 @@ html[data-theme="dark"] .crop-handle {
         max-width: none;
     }
 }
+
+
+/* Incremental batch progress */
+.batch-summary-info {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.batch-overall-track,
+.batch-progress-track {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 4px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #e8e8e8;
+}
+.batch-overall-track {
+    max-width: 360px;
+    margin-top: 5px;
+}
+.batch-overall-track > span,
+.batch-progress-fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--brand-gradient);
+    transition: width .18s ease;
+}
+.batch-item.pending {
+    cursor: wait;
+}
+.batch-item-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.batch-item-progress > small {
+    color: #858585;
+    font-size: 10px;
+    line-height: 1.3;
+}
+.batch-progress-track {
+    height: 3px;
+}
+.batch-progress-fill.indeterminate {
+    width: 34%;
+    animation: inlay-progress 1.15s ease-in-out infinite;
+}
+.batch-placeholder.batch-spinner {
+    position: relative;
+    border: 3px solid #e6e6e6;
+    border-top-color: #c13584;
+    border-radius: 50%;
+    background: transparent;
+    animation: inlay-spin .8s linear infinite;
+}
+.status.processing {
+    color: #858585;
+}
+.dropzone:has(input:disabled) {
+    cursor: wait;
+    opacity: .72;
+}
+html[data-theme="dark"] .batch-overall-track,
+html[data-theme="dark"] .batch-progress-track {
+    background: #414141;
+}
+html[data-theme="dark"] .batch-placeholder.batch-spinner {
+    border-color: #484848;
+    border-top-color: #e1306c;
+}
+html[data-theme="dark"] .batch-item-progress > small,
+html[data-theme="dark"] .status.processing {
+    color: #aaa;
+}
+@keyframes inlay-progress {
+    0% { transform: translateX(-110%); }
+    100% { transform: translateX(310%); }
+}
+@keyframes inlay-spin {
+    to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .batch-progress-fill,
+    .batch-placeholder.batch-spinner {
+        animation: none;
+        transition: none;
+    }
+}
