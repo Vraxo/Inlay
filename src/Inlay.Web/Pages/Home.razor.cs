@@ -20,6 +20,7 @@ public partial class Home
     private string error = "";
     private string validationMessage = "";
     private bool isProcessing;
+    private string themePreference = "system";
     private int sourceWidth;
     private int sourceHeight;
     private int cropX;
@@ -29,6 +30,21 @@ public partial class Home
     private int cornerRadius;
 
     private string StatusClass => GetStatusClass(activeImage?.Detection);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        themePreference = await JS.InvokeAsync<string>("inlay.getThemePreference");
+        StateHasChanged();
+    }
+
+    private async Task ChangeTheme(ChangeEventArgs args)
+    {
+        themePreference = args.Value?.ToString() is "light" or "dark" ? args.Value.ToString()! : "system";
+        await JS.InvokeVoidAsync("inlay.setThemePreference", themePreference);
+    }
     private int SuccessfulCount => images.Count(image => image.CropBytes is not null);
     private int ReviewCount => images.Count(image => image.Error.Length == 0 && (image.Detection?.Status != DetectionStatus.Extracted || image.Detection?.Best is null));
     private int FailedCount => images.Count(image => image.Error.Length > 0);
