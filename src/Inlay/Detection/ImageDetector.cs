@@ -105,10 +105,30 @@ public sealed class ImageDetector
         // rectangle win. Only adjust X after the best vertical candidate is chosen.
         var best = ranked[0];
         var analysisBounds = ScaleRect(best.Bounds, scale);
-        var refinedBounds = ScaleRect(RefineHorizontalBounds(edges, analysisBounds), 1.0 / scale);
+        var refinedAnalysisBounds = RefineHorizontalBounds(edges, analysisBounds);
+        var refinedBounds = ScaleRect(refinedAnalysisBounds, 1.0 / scale);
+        var finalBounds = new Rect(refinedBounds.X, best.Bounds.Y, refinedBounds.Width, best.Bounds.Height);
+
+        // Confidence must describe the rectangle shown to the user, not the
+        // original contour that was used to discover its vertical position.
+        var boundary = MeasureBoundaryContinuity(edges, refinedAnalysisBounds);
+        var edgeStrength = MeasureEdgeStrength(gray, refinedAnalysisBounds);
+        var geometry = MeasureRectangleGeometry(edges, refinedAnalysisBounds);
+        var sharpness = MeasureSharpnessContrast(gray, refinedAnalysisBounds);
+        var areaRatio = (double)(refinedAnalysisBounds.Width * refinedAnalysisBounds.Height) /
+                        (analysis.Width * analysis.Height);
+        var areaFit = Math.Clamp(1.0 - Math.Abs(areaRatio - 0.35) / 0.65, 0.25, 1.0);
+        var confidence = boundary * 0.34 + edgeStrength * 0.18 + geometry * 0.18 +
+                         sharpness * 0.18 + best.CornerFit * 0.07 + areaFit * 0.05;
         best = best with
         {
-            Bounds = new Rect(refinedBounds.X, best.Bounds.Y, refinedBounds.Width, best.Bounds.Height)
+            Bounds = finalBounds,
+            Confidence = confidence,
+            BoundaryContinuity = boundary,
+            EdgeStrength = edgeStrength,
+            GeometryFit = geometry,
+            SharpnessContrast = sharpness,
+            AreaRatio = areaRatio
         };
 
         var second = ranked.Length > 1 ? ranked[1] : null;
@@ -220,6 +240,23 @@ public sealed class ImageDetector
             .FirstOrDefault();
 
         return wider.Bounds.Width > 0 ? wider.Bounds : bounds;
+    }
+
+    private static double MeasureRectangleGeometry(Mat edges, Rect rect)
+    {
+        var thickness = Math.Max(1, Math.Min(3, Math.Min(rect.Width, rect.Height) / 100));
+        var top = CountEdges(edges, new Rect(rect.X, rect.Y, rect.Width, thickness)) /
+                  (rect.Width * (double)thickness);
+        var bottom = CountEdges(edges, new Rect(rect.X, rect.Bottom - thickness, rect.Width, thickness)) /
+                     (rect.Width * (double)thickness);
+        var left = CountEdges(edges, new Rect(rect.X, rect.Y, thickness, rect.Height)) /
+                   (rect.Height * (double)thickness);
+        var right = CountEdges(edges, new Rect(rect.Right - thickness, rect.Y, thickness, rect.Height)) /
+                    (rect.Height * (double)thickness);
+
+        // A good rectangle needs all four sides, not just a strong average
+        // that can hide one missing or misplaced edge.
+        return Math.Clamp(Math.Min(Math.Min(top, bottom), Math.Min(left, right)) * 3.0, 0, 1);
     }
 
     private static double MeasureBoundaryContinuity(Mat edges, Rect rect)
