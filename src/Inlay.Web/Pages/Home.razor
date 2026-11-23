@@ -1,6 +1,6 @@
 @page "/"
 @inject IJSRuntime JS
-<PageTitle>Inlay — Extract an image</PageTitle>
+<PageTitle>Inlay — Extract images</PageTitle>
 
 <main class="shell">
     <header class="topbar">
@@ -8,21 +8,32 @@
             <span class="mark"><i></i><i></i><i></i><i></i></span>
             <span>inlay</span>
         </a>
-        <span class="local-note"><span></span> Runs on your device</span>
+        <div class="header-actions">
+            <span class="local-note"><span></span> Runs on your device</span>
+            <label class="theme-control">
+                <span>Theme</span>
+                <select class="theme-select" aria-label="Color theme" value="@themePreference" @onchange="ChangeTheme">
+                    <option value="system">System</option>
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                </select>
+            </label>
+        </div>
     </header>
 
     <section class="intro">
         <p class="eyebrow">SCREENSHOT IMAGE EXTRACTOR</p>
         <h1>Keep the image.<br /><span>Lose the screenshot.</span></h1>
-        <p class="lede">Choose a screenshot. Inlay finds the image inside it, then lets you fine-tune the crop before saving a clean PNG. Nothing is uploaded.</p>
+        <p class="lede">Choose one or several screenshots. Inlay finds the images inside them, then lets you fine-tune any crop before saving clean PNGs. Nothing is uploaded.</p>
     </section>
 
     <section class="workspace">
         <label class="dropzone" for="image-file">
             <span class="upload-icon">↑</span>
-            <strong>Drop a screenshot here</strong>
-            <span>or click to browse · PNG, JPEG or WebP · up to 25 MB</span>
-            <InputFile id="image-file" OnChange="LoadImage" accept="image/png,image/jpeg,image/webp" />
+            <strong>Drop screenshots here</strong>
+            <span>or click to browse · PNG, JPEG or WebP · up to 25 MB each</span>
+            <span class="upload-limit">Up to 20 images · 50 MB total</span>
+            <InputFile id="image-file" OnChange="LoadImages" accept="image/png,image/jpeg,image/webp" multiple />
         </label>
 
         @if (!string.IsNullOrEmpty(error))
@@ -32,19 +43,66 @@
 
         @if (isProcessing)
         {
-            <div class="message">Analyzing screenshot…</div>
+            <div class="message">Analyzing images… This may take a moment.</div>
         }
 
-        @if (!string.IsNullOrEmpty(sourcePreview))
+        @if (HasResults)
         {
+            <section class="batch-summary">
+                <div>
+                    <strong>@images.Count image@(images.Count == 1 ? "" : "s") processed</strong>
+                    <span>@SuccessfulCount ready · @ReviewCount to review · @FailedCount failed</span>
+                </div>
+                <button class="download batch-download" @onclick="DownloadAll" disabled="@(SuccessfulCount == 0)">Download all <span>↓</span></button>
+            </section>
+
+            <div class="batch-list" aria-label="Processed images">
+                @foreach (var image in images)
+                {
+                    <button class="batch-item @(ReferenceEquals(activeImage, image) ? "selected" : "")" @onclick="() => SelectImage(image)" disabled="@(image.SourceBytes is null)">
+                        @if (!string.IsNullOrEmpty(image.CropPreview))
+                        {
+                            <img src="@image.CropPreview" alt="" />
+                        }
+                        else
+                        {
+                            <span class="batch-placeholder">×</span>
+                        }
+                        <span class="batch-item-info">
+                            <strong title="@image.FileName">@image.FileName</strong>
+                            <small class="status @(image.Error.Length > 0 ? "rejected" : GetStatusClass(image.Detection))">@GetStatusLabel(image)</small>
+                            @if (!string.IsNullOrEmpty(image.Error))
+                            {
+                                <small class="batch-error">@image.Error</small>
+                            }
+                        </span>
+                        @if (ReferenceEquals(activeImage, image))
+                        {
+                            <span class="selected-mark">✓</span>
+                        }
+                    </button>
+                }
+            </div>
+        }
+
+        @if (activeImage is not null)
+        {
+            <div class="active-file-heading">
+                <div>
+                    <p class="eyebrow">CURRENT IMAGE</p>
+                    <h2 title="@activeImage.FileName">@activeImage.FileName</h2>
+                </div>
+                <span class="status @StatusClass">@GetStatusLabel(activeImage)</span>
+            </div>
+
             <div class="results">
                 <div class="panel">
                     <div class="panel-heading">
                         <span>01 / Original</span>
-                        <span class="file-name">@fileName</span>
+                        <span class="file-name">@activeImage.FileName</span>
                     </div>
                     <div class="image-frame">
-                        <img src="@sourcePreview" alt="Original screenshot" />
+                        <img src="@activeImage.SourcePreview" alt="Original screenshot" />
                     </div>
                     <div class="image-meta">@sourceWidth × @sourceHeight px</div>
                 </div>
@@ -52,15 +110,12 @@
                 <div class="panel">
                     <div class="panel-heading">
                         <span>02 / Crop preview</span>
-                        @if (detection is not null)
-                        {
-                            <span class="status @StatusClass">@detection.Status</span>
-                        }
+                        <span class="status @StatusClass">@GetStatusLabel(activeImage)</span>
                     </div>
-                    @if (!string.IsNullOrEmpty(cropPreview))
+                    @if (!string.IsNullOrEmpty(activeImage.CropPreview))
                     {
                         <div class="image-frame crop-frame">
-                            <img src="@cropPreview" alt="Current crop preview" />
+                            <img src="@activeImage.CropPreview" alt="Current crop preview" />
                         </div>
                         <div class="image-meta">@cropWidth × @cropHeight px · PNG with transparent corners</div>
                     }
@@ -69,29 +124,29 @@
                         <div class="empty-preview">
                             <span>⌖</span>
                             <strong>Set a crop rectangle</strong>
-                            <p>@(detection?.Reason ?? "Adjust the coordinates below, then apply your crop.")</p>
+                            <p>@(activeImage.Detection?.Reason ?? "Adjust the coordinates below, then apply your crop.")</p>
                         </div>
                     }
                 </div>
             </div>
 
-            @if (detection is { Status: DetectionStatus.Rejected or DetectionStatus.Review })
+            @if (activeImage.Detection is { Status: DetectionStatus.Rejected or DetectionStatus.Review } || activeImage.Detection?.Best is null)
             {
                 <div class="detection-notice @StatusClass">
-                    @if (detection.Best is null)
+                    @if (activeImage.Detection?.Best is null)
                     {
                         <strong>No automatic crop found</strong>
-                        <p>@detection.Reason The preview above is the entire screenshot, not an extracted image. Set the crop rectangle below to select the image manually.</p>
+                        <p>@(activeImage.Detection?.Reason ?? "Set the crop rectangle manually.") The preview is the entire screenshot until you choose a crop.</p>
                     }
-                    else if (detection.Status == DetectionStatus.Rejected)
+                    else if (activeImage.Detection?.Status == DetectionStatus.Rejected)
                     {
                         <strong>Possible crop found, but confidence is too low</strong>
-                        <p>@detection.Reason Check the suggested rectangle below and adjust it before downloading.</p>
+                        <p>@activeImage.Detection.Reason Check the suggested rectangle below and adjust it before downloading.</p>
                     }
                     else
                     {
                         <strong>Possible crop found — please review it</strong>
-                        <p>@detection.Reason Check the suggested rectangle below and adjust it if the edges do not line up.</p>
+                        <p>@activeImage.Detection.Reason Check the suggested rectangle below and adjust it if the edges do not line up.</p>
                     }
                 </div>
             }
@@ -102,7 +157,7 @@
                         <p class="eyebrow">CROP EDITOR</p>
                         <h2>Fine-tune your selection</h2>
                     </div>
-                    <button class="subtle-button" @onclick="UseDetectionBounds" disabled="@(detection?.Best is null)">Reset to detection</button>
+                    <button class="subtle-button" @onclick="UseDetectionBounds" disabled="@(activeImage.Detection?.Best is null)">Reset to detection</button>
                 </div>
                 <p class="editor-help">Adjust the rectangle in source-image pixels. The crop must stay inside the original image.</p>
                 <div class="crop-fields">
@@ -119,7 +174,8 @@
             </section>
 
             <div class="result-footer">
-                <button class="download" @onclick="DownloadCrop" disabled="@(cropBytes is null)">Download PNG <span>↓</span></button>
+                <span class="reason">Changes are saved to this image in the batch.</span>
+                <button class="download" @onclick="DownloadCrop" disabled="@(activeImage.CropBytes is null)">Download PNG <span>↓</span></button>
             </div>
         }
     </section>

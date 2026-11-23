@@ -4,6 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#fafafa" />
+    <script>
+        (() => {
+            const preference = localStorage.getItem("inlay-theme") || "system";
+            const dark = preference === "dark" || (preference === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+            document.documentElement.dataset.theme = dark ? "dark" : "light";
+        })();
+    </script>
     <base href="./" />
     <title>Inlay — Extract an image</title>
     <link rel="stylesheet" href="app.css" />
