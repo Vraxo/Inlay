@@ -28,11 +28,12 @@
 
     <section class="workspace">
         <label class="dropzone" for="image-file">
-            <span class="upload-icon">↑</span>
+            <span class="upload-icon" aria-hidden="true">↑</span>
             <strong>Drop screenshots here</strong>
-            <span>or click to browse · PNG, JPEG or WebP · up to 25 MB each</span>
+            <span class="browse-action">Browse files <span aria-hidden="true">↗</span></span>
+            <span class="upload-hint">PNG, JPEG or WebP · up to 25 MB each</span>
             <span class="upload-limit">Up to 20 images · 50 MB total</span>
-            <InputFile id="image-file" OnChange="LoadImages" accept="image/png,image/jpeg,image/webp" multiple />
+            <InputFile id="image-file" class="file-input" aria-label="Browse screenshots" OnChange="LoadImages" accept="image/png,image/jpeg,image/webp" multiple />
         </label>
 
         @if (!string.IsNullOrEmpty(error))
