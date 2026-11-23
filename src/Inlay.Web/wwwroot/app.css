@@ -175,3 +175,31 @@ html[data-theme="dark"] .shell .dropzone.dragging {
         radial-gradient(ellipse at 50% 0%, rgba(193, 53, 132, .2), transparent 72%),
         #30252f;
 }
+
+
+/* Dark-theme counterparts for gradient interaction borders and repository links */
+html[data-theme="dark"] .shell .repo-link {
+    border-color: #414141;
+    background: #292929;
+    color: #f5f5f5;
+}
+html[data-theme="dark"] .shell .repo-link:hover {
+    border-color: transparent;
+    background: linear-gradient(#292929, #292929) padding-box, var(--brand-gradient-hover) border-box;
+    color: #fff;
+}
+html[data-theme="dark"] .shell .dropzone:hover,
+html[data-theme="dark"] .shell .dropzone.dragging {
+    border-color: transparent;
+    background:
+        radial-gradient(ellipse at 50% 0%, rgba(193, 53, 132, .16), transparent 72%) padding-box,
+        #292429 padding-box,
+        var(--brand-gradient-hover) border-box;
+    box-shadow: none;
+}
+html[data-theme="dark"] .shell .batch-item:hover:not(:disabled),
+html[data-theme="dark"] .shell .batch-item.selected {
+    border-color: transparent;
+    background: linear-gradient(#2a2229, #2a2229) padding-box, var(--brand-gradient-hover) border-box;
+    box-shadow: none;
+}

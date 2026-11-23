@@ -10,6 +10,7 @@
         </a>
         <div class="header-actions">
             <span class="local-note"><span></span> Runs on your device</span>
+            <a class="repo-link" href="https://github.com/Vraxo/Inlay" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
             <label class="theme-control">
                 <span>Theme</span>
                 <select class="theme-select" aria-label="Color theme" value="@themePreference" @onchange="ChangeTheme">
@@ -30,7 +31,7 @@
         <label class="dropzone" for="image-file">
             <span class="upload-icon" aria-hidden="true">↑</span>
             <strong>Drop screenshots here</strong>
-            <span class="browse-action">Browse files <span aria-hidden="true">↗</span></span>
+            <span class="browse-action">Browse files</span>
             <span class="upload-hint">PNG, JPEG or WebP · up to 25 MB each</span>
             <span class="upload-limit">Up to 50 images · 100 MB total</span>
             <InputFile id="image-file" class="file-input" aria-label="Browse screenshots" OnChange="LoadImages" accept="image/png,image/jpeg,image/webp" multiple disabled="@isProcessing" />
@@ -203,5 +204,6 @@
     <footer>
         <span>Inlay <span class="muted">· Early browser version</span></span>
         <span>OpenCV · WebAssembly · No uploads</span>
+        <a class="repo-link footer-repo-link" href="https://github.com/Vraxo/Inlay" target="_blank" rel="noopener noreferrer">Source code <span aria-hidden="true">↗</span></a>
     </footer>
 </main>
