@@ -6,7 +6,7 @@
 
 ## Browser proof of concept
 
-Inlay includes a standalone Blazor WebAssembly app that runs the existing C# detector with OpenCvSharp's WebAssembly runtime. Image decoding, detection, and PNG encoding happen in the browser; screenshots are not uploaded.
+Inlay includes a standalone Blazor WebAssembly app that uses the shared Inlay.Core library with OpenCvSharp's WebAssembly runtime. Image decoding, detection, and PNG encoding happen in the browser; screenshots are not uploaded.
 
 Requires the .NET 11 SDK and the WebAssembly build tools workload:
 
@@ -42,6 +42,12 @@ inlay screenshot.jpg --corners keep
 inlay screenshot.jpg --overwrite
 ```
 
+Run the CLI directly from the repository with:
+
+```powershell
+dotnet run --project src/Inlay.Cli -- screenshot.jpg
+```
+
 Supported input formats: PNG, JPEG/JPG, and WebP. PNG is used for extracted output so transparent rounded corners can be retained.
 
 ## Detection behavior
@@ -66,7 +72,7 @@ dotnet build --configuration Release
 dotnet test --configuration Release
 ```
 
-The repository's existing CI/deployment setup is intentionally not modified by this change.
+The shared image-processing code lives in `src/Inlay.Core`; the CLI and browser app are separate consumers.
 
 ## Privacy
 

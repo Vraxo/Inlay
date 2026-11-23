@@ -1,7 +1,8 @@
 using Inlay.Cli;
+using Inlay.Processing;
 using Xunit;
 
-namespace Inlay.Tests;
+namespace Inlay.Cli.Tests;
 
 public sealed class ArgumentsTests
 {

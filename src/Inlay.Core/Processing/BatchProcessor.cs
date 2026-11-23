@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Inlay.Cli;
 using Inlay.Detection;
 using Inlay.Extraction;
 using Inlay.Reporting;
@@ -7,7 +6,41 @@ using OpenCvSharp;
 
 namespace Inlay.Processing;
 
-public sealed record BatchSummary(int Scanned, int Extracted, int Review, int Rejected, int Failed);
+public sealed record CropRectangle(int X, int Y, int Width, int Height);
+
+public sealed record BatchOptions(
+    string Input,
+    string? Output,
+    bool Recursive,
+    bool Preview,
+    CropRectangle? Rectangle,
+    bool KeepCorners,
+    bool Report,
+    bool Overwrite);
+
+public enum BatchItemStatus
+{
+    Extracted,
+    Review,
+    Rejected,
+    Skipped,
+    Failed
+}
+
+public sealed record BatchItemResult(
+    string Input,
+    BatchItemStatus Status,
+    string? OutputPath = null,
+    double? Confidence = null,
+    string? Message = null);
+
+public sealed record BatchSummary(
+    int Scanned,
+    int Extracted,
+    int Review,
+    int Rejected,
+    int Failed,
+    IReadOnlyList<BatchItemResult> Items);
 
 public sealed class BatchProcessor
 {
@@ -25,7 +58,7 @@ public sealed class BatchProcessor
             !Path.IsPathRooted(relative));
     }
 
-    public async Task<BatchSummary> RunAsync(RunOptions options)
+    public async Task<BatchSummary> RunAsync(BatchOptions options)
     {
         var input = Path.GetFullPath(options.Input);
         if (!File.Exists(input) && !Directory.Exists(input))
@@ -54,6 +87,7 @@ public sealed class BatchProcessor
             throw new InvalidOperationException("No supported image files were found.");
 
         var counts = new int[5];
+        var items = new List<BatchItemResult>(files.Length);
         foreach (var file in files)
         {
             counts[0]++;
@@ -70,8 +104,9 @@ public sealed class BatchProcessor
                 if (!options.Overwrite &&
                     (File.Exists(output) || (options.Preview && File.Exists(previewPath)) || (options.Report && File.Exists(reportPath))))
                 {
-                    Console.WriteLine($"SKIP    {relative} — one or more output files already exist (use --overwrite)");
                     counts[4]++;
+                    items.Add(new BatchItemResult(relative, BatchItemStatus.Skipped,
+                        Message: "one or more output files already exist (use --overwrite)"));
                     continue;
                 }
 
@@ -104,17 +139,18 @@ public sealed class BatchProcessor
                     extractor.Save(source, detection.Best.Bounds, output, detection.Best.CornerRadius, options.KeepCorners);
                     savedOutput = output;
                     counts[1]++;
-                    Console.WriteLine($"EXTRACT {relative} → {output}  ({detection.Best.Confidence:P0})");
+                    items.Add(new BatchItemResult(relative, BatchItemStatus.Extracted,
+                        output, detection.Best.Confidence));
                 }
                 else if (detection.Status == DetectionStatus.Review)
                 {
                     counts[2]++;
-                    Console.WriteLine($"REVIEW  {relative} — {detection.Reason}");
+                    items.Add(new BatchItemResult(relative, BatchItemStatus.Review, Message: detection.Reason));
                 }
                 else
                 {
                     counts[3]++;
-                    Console.WriteLine($"REJECT  {relative} — {detection.Reason}");
+                    items.Add(new BatchItemResult(relative, BatchItemStatus.Rejected, Message: detection.Reason));
                 }
 
                 if (options.Report)
@@ -135,10 +171,11 @@ public sealed class BatchProcessor
             catch (Exception exception)
             {
                 counts[4]++;
-                Console.Error.WriteLine($"FAILED  {Path.GetFileName(file)} — {exception.Message}");
+                items.Add(new BatchItemResult(Path.GetFileName(file), BatchItemStatus.Failed,
+                    Message: exception.Message));
             }
         }
 
-        return new BatchSummary(counts[0], counts[1], counts[2], counts[3], counts[4]);
+        return new BatchSummary(counts[0], counts[1], counts[2], counts[3], counts[4], items);
     }
 }
