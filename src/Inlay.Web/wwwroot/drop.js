@@ -260,6 +260,61 @@
                 commit(editor);
             };
 
+            editor.magnifier = stage.querySelector(".crop-magnifier");
+            editor.onMagnifierMove = event => {
+                if (!editor.magnifier || !editor.image.complete || !editor.image.naturalWidth)
+                    return;
+
+                const bounds = editor.image.getBoundingClientRect();
+                const stageBounds = editor.stage.getBoundingClientRect();
+                if (!bounds.width || !bounds.height)
+                    return;
+
+                const sourceX = clamp((event.clientX - bounds.left) / bounds.width * editor.sourceWidth, 0, editor.sourceWidth - 1);
+                const sourceY = clamp((event.clientY - bounds.top) / bounds.height * editor.sourceHeight, 0, editor.sourceHeight - 1);
+                const lens = editor.magnifier;
+                const context = lens.getContext("2d");
+                const zoom = 9;
+                const sampleSize = lens.width / zoom;
+                const sampleX = clamp(sourceX - sampleSize / 2, 0, Math.max(0, editor.sourceWidth - sampleSize));
+                const sampleY = clamp(sourceY - sampleSize / 2, 0, Math.max(0, editor.sourceHeight - sampleSize));
+
+                context.clearRect(0, 0, lens.width, lens.height);
+                context.imageSmoothingEnabled = false;
+                context.drawImage(editor.image, sampleX, sampleY, sampleSize, sampleSize, 0, 0, lens.width, lens.height);
+
+                context.save();
+                context.strokeStyle = "rgba(255,255,255,.22)";
+                context.lineWidth = 1;
+                for (let offset = 0; offset <= lens.width; offset += zoom) {
+                    context.beginPath();
+                    context.moveTo(offset + .5, 0);
+                    context.lineTo(offset + .5, lens.height);
+                    context.moveTo(0, offset + .5);
+                    context.lineTo(lens.width, offset + .5);
+                    context.stroke();
+                }
+                context.strokeStyle = "#f77737";
+                context.lineWidth = 2;
+                context.beginPath();
+                context.moveTo(lens.width / 2, 0);
+                context.lineTo(lens.width / 2, lens.height);
+                context.moveTo(0, lens.height / 2);
+                context.lineTo(lens.width, lens.height / 2);
+                context.stroke();
+                context.restore();
+
+                const lensSize = 204;
+                const localX = event.clientX - stageBounds.left;
+                const localY = event.clientY - stageBounds.top;
+                lens.style.left = `${clamp(localX + 18, 0, Math.max(0, stageBounds.width - lensSize))}px`;
+                lens.style.top = `${clamp(localY + 18, 0, Math.max(0, stageBounds.height - lensSize))}px`;
+                lens.classList.add("visible");
+            };
+            editor.onMagnifierLeave = () => {
+                if (!editor.drag)
+                    editor.magnifier?.classList.remove("visible");
+            };
             editor.onRadiusInput = () => {
                 setCrop(editor, editor.x, editor.y, editor.width, editor.height, Number(editor.radiusControl.value));
             };
@@ -271,6 +326,8 @@
             editor.selection.addEventListener("pointerup", editor.onPointerUp);
             editor.selection.addEventListener("pointercancel", editor.onPointerUp);
             editor.selection.addEventListener("keydown", editor.onKeyDown);
+            editor.stage.addEventListener("pointermove", editor.onMagnifierMove);
+            editor.stage.addEventListener("pointerleave", editor.onMagnifierLeave);
             editor.radiusControl.addEventListener("input", editor.onRadiusInput);
             editor.radiusControl.addEventListener("change", editor.onRadiusChange);
             editor.image.addEventListener("load", editor.onImageLoad);
