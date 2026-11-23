@@ -11,8 +11,8 @@ namespace Inlay.Web.Pages;
 public partial class Home
 {
     private const long MaximumFileSize = 25 * 1024 * 1024;
-    private const long MaximumBatchSize = 50 * 1024 * 1024;
-    private const int MaximumFiles = 20;
+    private const long MaximumBatchSize = 100 * 1024 * 1024;
+    private const int MaximumFiles = 50;
 
     private readonly ImageDetector detector = new();
     private readonly List<BatchImage> images = [];
@@ -30,6 +30,13 @@ public partial class Home
     private int cornerRadius;
 
     private string StatusClass => GetStatusClass(activeImage?.Detection);
+    private int SuccessfulCount => images.Count(image => image.CropBytes is not null);
+    private int ReviewCount => images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status != DetectionStatus.Extracted);
+    private int FailedCount => images.Count(image => image.Status == BatchStatus.Failed);
+    private int CompletedCount => images.Count(image => image.IsComplete);
+    private int BatchProgressPercent => images.Count == 0 ? 0 : (int)Math.Round(CompletedCount * 100d / images.Count);
+    private string BatchProgressStyle => $"width: {BatchProgressPercent}%";
+    private bool HasResults => images.Count > 0;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -45,10 +52,6 @@ public partial class Home
         themePreference = args.Value?.ToString() is "light" or "dark" ? args.Value.ToString()! : "system";
         await JS.InvokeVoidAsync("inlay.setThemePreference", themePreference);
     }
-    private int SuccessfulCount => images.Count(image => image.CropBytes is not null);
-    private int ReviewCount => images.Count(image => image.Error.Length == 0 && (image.Detection?.Status != DetectionStatus.Extracted || image.Detection?.Best is null));
-    private int FailedCount => images.Count(image => image.Error.Length > 0);
-    private bool HasResults => images.Count > 0;
 
     private static string GetStatusClass(DetectionResult? result) => result?.Status switch
     {
@@ -59,21 +62,53 @@ public partial class Home
 
     private static string GetStatusLabel(BatchImage image)
     {
-        if (!string.IsNullOrEmpty(image.Error))
+        if (image.Status == BatchStatus.Failed)
             return "Failed";
 
-        return image.Detection?.Status switch
+        return image.Status switch
         {
-            DetectionStatus.Extracted => "Extracted",
-            DetectionStatus.Review => "Review",
-            _ => "Manual crop"
+            BatchStatus.Queued => "Queued",
+            BatchStatus.Reading => "Reading",
+            BatchStatus.Detecting => "Detecting",
+            BatchStatus.CreatingPreview => "Preparing preview",
+            BatchStatus.Completed when image.Detection?.Status == DetectionStatus.Extracted => "Extracted",
+            BatchStatus.Completed when image.Detection?.Best is not null => "Review",
+            BatchStatus.Completed => "Manual crop",
+            _ => "Queued"
         };
     }
 
+    private static string GetBatchStatusClass(BatchImage image)
+    {
+        if (image.Status == BatchStatus.Failed)
+            return "rejected";
+
+        if (image.Status != BatchStatus.Completed)
+            return "processing";
+
+        return image.Detection?.Status == DetectionStatus.Extracted ? "success" : "review";
+    }
+
+    private static string GetProgressText(BatchImage image) => image.Status switch
+    {
+        BatchStatus.Queued => "Waiting",
+        BatchStatus.Reading => $"Reading file · {image.Progress}%",
+        BatchStatus.Detecting => "Detecting image",
+        BatchStatus.CreatingPreview => "Creating preview",
+        BatchStatus.Completed => GetStatusLabel(image),
+        BatchStatus.Failed => image.Error,
+        _ => ""
+    };
+
+    private static string GetProgressStyle(BatchImage image) =>
+        $"width: {(image.IsIndeterminate ? 34 : image.Progress)}%";
+
+
     private async Task LoadImages(InputFileChangeEventArgs args)
     {
-        images.Clear();
-        activeImage = null;
+        if (isProcessing)
+            return;
+
         error = "";
         validationMessage = "";
 
@@ -90,81 +125,155 @@ public partial class Home
 
         if (files.Sum(file => file.Size) > MaximumBatchSize)
         {
-            error = "The selected files exceed the 50 MB total batch limit. Choose fewer or smaller images.";
+            error = "The selected files exceed the 100 MB total batch limit. Choose fewer or smaller images.";
             return;
         }
 
+        images.Clear();
+        activeImage = null;
+        foreach (var file in files)
+            images.Add(new BatchImage { FileName = file.Name, FileSize = file.Size });
+
+        if (images.Count == 0)
+            return;
+
         isProcessing = true;
+        await RefreshBatchAsync();
+
         try
         {
-            foreach (var file in files)
-            {
-                var item = new BatchImage { FileName = file.Name };
-                images.Add(item);
-
-                if (file.Size > MaximumFileSize)
-                {
-                    item.Error = "Larger than 25 MB.";
-                    continue;
-                }
-
-                if (file.ContentType is not ("image/png" or "image/jpeg" or "image/webp"))
-                {
-                    item.Error = "Unsupported format.";
-                    continue;
-                }
-
-                try
-                {
-                    await using var stream = file.OpenReadStream(MaximumFileSize);
-                    using var memory = new MemoryStream();
-                    await stream.CopyToAsync(memory);
-                    item.SourceBytes = memory.ToArray();
-                    item.SourcePreview = $"data:{file.ContentType};base64,{Convert.ToBase64String(item.SourceBytes)}";
-
-                    using var source = Cv2.ImDecode(item.SourceBytes, ImreadModes.Color);
-                    if (source.Empty())
-                        throw new InvalidDataException("Could not decode this image.");
-
-                    item.SourceWidth = source.Width;
-                    item.SourceHeight = source.Height;
-                    item.Detection = detector.Detect(source);
-
-                    if (item.Detection.Best is not null)
-                    {
-                        item.CropX = item.Detection.Best.Bounds.X;
-                        item.CropY = item.Detection.Best.Bounds.Y;
-                        item.CropWidth = item.Detection.Best.Bounds.Width;
-                        item.CropHeight = item.Detection.Best.Bounds.Height;
-                        item.CornerRadius = item.Detection.Best.CornerRadius;
-                    }
-                    else
-                    {
-                        item.CropWidth = source.Width;
-                        item.CropHeight = source.Height;
-                    }
-
-                    item.CropBytes = CreateCrop(item, item.CropX, item.CropY, item.CropWidth, item.CropHeight, item.CornerRadius);
-                    item.CropPreview = $"data:image/png;base64,{Convert.ToBase64String(item.CropBytes)}";
-                }
-                catch (Exception exception)
-                {
-                    item.Error = $"Could not process: {exception.Message}";
-                }
-            }
-
-            var firstUsable = images.FirstOrDefault(image => image.SourceBytes is not null);
-            if (firstUsable is not null)
-                SelectImage(firstUsable);
+            for (var index = 0; index < files.Count; index++)
+                await ProcessImage(files[index], images[index]);
         }
         finally
         {
             isProcessing = false;
+            await RefreshBatchAsync();
         }
+    }
+
+    private async Task ProcessImage(IBrowserFile file, BatchImage image)
+    {
+        if (file.Size > MaximumFileSize)
+        {
+            FailImage(image, "Larger than 25 MB.");
+            await RefreshBatchAsync();
+            return;
+        }
+
+        if (file.ContentType is not ("image/png" or "image/jpeg" or "image/webp"))
+        {
+            FailImage(image, "Unsupported format.");
+            await RefreshBatchAsync();
+            return;
+        }
+
+        image.Status = BatchStatus.Reading;
+        image.Progress = 0;
+        await RefreshBatchAsync();
+
+        try
+        {
+            await using var stream = file.OpenReadStream(MaximumFileSize);
+            using var memory = new MemoryStream();
+            var buffer = new byte[64 * 1024];
+            var nextProgressUpdate = 5;
+
+            while (true)
+            {
+                var bytesRead = await stream.ReadAsync(buffer.AsMemory());
+                if (bytesRead == 0)
+                    break;
+
+                memory.Write(buffer, 0, bytesRead);
+                var progress = file.Size == 0 ? 100 : (int)(memory.Length * 100L / file.Size);
+                if (progress >= nextProgressUpdate || progress == 100)
+                {
+                    image.Progress = Math.Clamp(progress, 0, 100);
+                    nextProgressUpdate = image.Progress + 5;
+                    await RefreshBatchAsync();
+                }
+            }
+
+            image.SourceBytes = memory.ToArray();
+            image.SourceContentType = file.ContentType;
+            image.Status = BatchStatus.Detecting;
+            image.IsIndeterminate = true;
+            await RefreshBatchAsync();
+
+            using var source = Cv2.ImDecode(image.SourceBytes, ImreadModes.Color);
+            if (source.Empty())
+                throw new InvalidDataException("Could not decode this image.");
+
+            image.SourceWidth = source.Width;
+            image.SourceHeight = source.Height;
+            image.Detection = detector.Detect(source);
+
+            if (image.Detection.Best is not null)
+            {
+                image.CropX = image.Detection.Best.Bounds.X;
+                image.CropY = image.Detection.Best.Bounds.Y;
+                image.CropWidth = image.Detection.Best.Bounds.Width;
+                image.CropHeight = image.Detection.Best.Bounds.Height;
+                image.CornerRadius = image.Detection.Best.CornerRadius;
+            }
+            else
+            {
+                image.CropWidth = source.Width;
+                image.CropHeight = source.Height;
+            }
+
+            image.Status = BatchStatus.CreatingPreview;
+            await RefreshBatchAsync();
+
+            image.CropBytes = CreateCrop(image, image.CropX, image.CropY, image.CropWidth, image.CropHeight, image.CornerRadius);
+            image.ThumbnailPreview = CreateThumbnail(image.CropBytes);
+            image.Status = BatchStatus.Completed;
+            image.Progress = 100;
+            image.IsIndeterminate = false;
+
+            if (activeImage is null)
+                SelectImage(image);
+
+            await RefreshBatchAsync();
+        }
+        catch (Exception exception)
+        {
+            FailImage(image, $"Could not process: {exception.Message}");
+            image.SourceBytes = null;
+            image.CropBytes = null;
+            image.SourcePreview = "";
+            image.CropPreview = "";
+            image.ThumbnailPreview = "";
+            await RefreshBatchAsync();
+        }
+    }
+
+    private static void FailImage(BatchImage image, string message)
+    {
+        image.Error = message;
+        image.Status = BatchStatus.Failed;
+        image.Progress = 100;
+        image.IsIndeterminate = false;
+    }
+
+    private async Task RefreshBatchAsync()
+    {
+        await InvokeAsync(StateHasChanged);
+        await Task.Yield();
     }
 
     private void SelectImage(BatchImage image)
     {
+        foreach (var other in images)
+        {
+            if (ReferenceEquals(other, image))
+                continue;
+
+            other.SourcePreview = "";
+            other.CropPreview = "";
+        }
+
         activeImage = image;
         sourceWidth = image.SourceWidth;
         sourceHeight = image.SourceHeight;
@@ -173,6 +282,8 @@ public partial class Home
         cropWidth = image.CropWidth;
         cropHeight = image.CropHeight;
         cornerRadius = image.CornerRadius;
+        image.SourcePreview = CreateDataUrl(image.SourceBytes!, image.SourceContentType);
+        image.CropPreview = image.CropBytes is null ? "" : CreateDataUrl(image.CropBytes, "image/png");
         validationMessage = "";
     }
 
@@ -209,6 +320,7 @@ public partial class Home
 
         activeImage.CropBytes = null;
         activeImage.CropPreview = "";
+        activeImage.ThumbnailPreview = "";
 
         if (cropX < 0 || cropY < 0 || cropWidth <= 0 || cropHeight <= 0 ||
             cropX >= sourceWidth || cropY >= sourceHeight ||
@@ -227,13 +339,15 @@ public partial class Home
         try
         {
             activeImage.CropBytes = CreateCrop(activeImage, cropX, cropY, cropWidth, cropHeight, cornerRadius);
-            activeImage.CropPreview = $"data:image/png;base64,{Convert.ToBase64String(activeImage.CropBytes)}";
+            activeImage.CropPreview = CreateDataUrl(activeImage.CropBytes, "image/png");
+            activeImage.ThumbnailPreview = CreateThumbnail(activeImage.CropBytes);
             SaveActiveImage();
         }
         catch (Exception exception)
         {
             activeImage.CropBytes = null;
             activeImage.CropPreview = "";
+            activeImage.ThumbnailPreview = "";
             validationMessage = $"Could not create crop: {exception.Message}";
         }
     }
@@ -252,6 +366,37 @@ public partial class Home
 
         return encodedCrop;
     }
+
+    private static string CreateThumbnail(byte[] cropBytes)
+    {
+        using var source = Cv2.ImDecode(cropBytes, ImreadModes.Unchanged);
+        if (source.Empty())
+            throw new InvalidOperationException("Could not decode the crop thumbnail.");
+
+        const int maximumDimension = 144;
+        var scale = Math.Min(1d, maximumDimension / (double)Math.Max(source.Width, source.Height));
+        using var thumbnail = new Mat();
+
+        if (scale < 1)
+        {
+            var size = new Size(
+                Math.Max(1, (int)Math.Round(source.Width * scale)),
+                Math.Max(1, (int)Math.Round(source.Height * scale)));
+            Cv2.Resize(source, thumbnail, size, interpolation: InterpolationFlags.Area);
+        }
+        else
+        {
+            source.CopyTo(thumbnail);
+        }
+
+        if (!Cv2.ImEncode(".png", thumbnail, out var encodedThumbnail))
+            throw new InvalidOperationException("Could not encode the crop thumbnail.");
+
+        return CreateDataUrl(encodedThumbnail, "image/png");
+    }
+
+    private static string CreateDataUrl(byte[] bytes, string contentType) =>
+        $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";
 
     private async Task DownloadCrop()
     {
@@ -298,14 +443,27 @@ public partial class Home
     private static string GetOutputName(string fileName) =>
         $"{Path.GetFileNameWithoutExtension(fileName)}.inlay.png";
 
+    private enum BatchStatus
+    {
+        Queued,
+        Reading,
+        Detecting,
+        CreatingPreview,
+        Completed,
+        Failed
+    }
+
     private sealed class BatchImage
     {
         public string FileName { get; init; } = "";
         public string Error { get; set; } = "";
         public byte[]? SourceBytes { get; set; }
         public byte[]? CropBytes { get; set; }
+        public string SourceContentType { get; set; } = "image/png";
         public string SourcePreview { get; set; } = "";
         public string CropPreview { get; set; } = "";
+        public string ThumbnailPreview { get; set; } = "";
+        public long FileSize { get; init; }
         public int SourceWidth { get; set; }
         public int SourceHeight { get; set; }
         public int CropX { get; set; }
@@ -313,6 +471,11 @@ public partial class Home
         public int CropWidth { get; set; }
         public int CropHeight { get; set; }
         public int CornerRadius { get; set; }
+        public int Progress { get; set; }
+        public bool IsIndeterminate { get; set; }
+        public BatchStatus Status { get; set; } = BatchStatus.Queued;
+        public bool IsComplete => Status is BatchStatus.Completed or BatchStatus.Failed;
+        public bool CanSelect => Status == BatchStatus.Completed && SourceBytes is not null && SourceWidth > 0 && SourceHeight > 0;
         public DetectionResult? Detection { get; set; }
     }
 }
