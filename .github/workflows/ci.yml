@@ -43,4 +43,4 @@ jobs:
         run: dotnet workload install wasm-tools
 
       - name: Build browser app
-        run: dotnet build src/Inlay.Web/Inlay.Web.csproj --configuration Release -p:WasmBuildNative=false
+        run: dotnet build src/Inlay.Web/Inlay.Web.csproj --configuration Release -p:WasmBuildNative=false -p:WasmEnableSIMD=true
