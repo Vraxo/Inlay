@@ -118,8 +118,10 @@ public sealed class ImageDetector
         var finalAreaRatio = (double)(refinedAnalysisBounds.Width * refinedAnalysisBounds.Height) /
                         (analysis.Width * analysis.Height);
         var finalAreaFit = Math.Clamp(1.0 - Math.Abs(finalAreaRatio - 0.35) / 0.65, 0.25, 1.0);
-        var finalConfidence = finalBoundary * 0.34 + finalEdgeStrength * 0.18 + finalGeometry * 0.18 +
-                              finalSharpness * 0.18 + best.CornerFit * 0.07 + finalAreaFit * 0.05;
+        // The final score emphasizes the crop's four actual borders. Interior
+        // texture and sharpness are supporting evidence, not proof of alignment.
+        var finalConfidence = finalBoundary * 0.42 + finalEdgeStrength * 0.08 + finalGeometry * 0.20 +
+                              finalSharpness * 0.13 + best.CornerFit * 0.07 + finalAreaFit * 0.10;
         best = best with
         {
             Bounds = finalBounds,
