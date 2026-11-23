@@ -73,7 +73,7 @@ public sealed class ImageDetector
             var radius = EstimateCornerRadius(contour, bounds);
             var cornerFit = radius > 0 ? 0.85 : 0.65;
 
-            var finalAreaFit = Math.Clamp(1.0 - Math.Abs(finalAreaRatio - 0.35) / 0.65, 0.25, 1.0);
+            var areaFit = Math.Clamp(1.0 - Math.Abs(areaRatio - 0.35) / 0.65, 0.25, 1.0);
             var confidence = boundary * 0.34 + edgeStrength * 0.18 + geometry * 0.18 +
                              sharpness * 0.18 + cornerFit * 0.07 + areaFit * 0.05;
 
@@ -117,7 +117,7 @@ public sealed class ImageDetector
         var finalSharpness = MeasureSharpnessContrast(gray, refinedAnalysisBounds);
         var finalAreaRatio = (double)(refinedAnalysisBounds.Width * refinedAnalysisBounds.Height) /
                         (analysis.Width * analysis.Height);
-        var areaFit = Math.Clamp(1.0 - Math.Abs(areaRatio - 0.35) / 0.65, 0.25, 1.0);
+        var finalAreaFit = Math.Clamp(1.0 - Math.Abs(finalAreaRatio - 0.35) / 0.65, 0.25, 1.0);
         var finalConfidence = finalBoundary * 0.34 + finalEdgeStrength * 0.18 + finalGeometry * 0.18 +
                               finalSharpness * 0.18 + best.CornerFit * 0.07 + finalAreaFit * 0.05;
         best = best with
