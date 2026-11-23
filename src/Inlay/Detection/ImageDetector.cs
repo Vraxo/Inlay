@@ -122,6 +122,7 @@ public sealed class ImageDetector
         Cv2.Canny(sourceBlurred, sourceSoftEdges, 25, 75);
         Cv2.BitwiseOr(sourceStrongEdges, sourceSoftEdges, sourceEdges);
         finalBounds = RefineTopBoundary(sourceEdges, finalBounds, 4);
+        finalBounds = RefineBottomBoundary(sourceEdges, finalBounds, 6);
 
         // Confidence must describe the rectangle shown to the user, not the
         // original contour that was used to discover its vertical position.
@@ -289,6 +290,50 @@ public sealed class ImageDetector
         return bestStrength >= 0.05 && refinedY != bounds.Y
             ? new Rect(bounds.X, refinedY, bounds.Width, bounds.Height)
             : bounds;
+    }
+
+    private static Rect RefineBottomBoundary(Mat edges, Rect bounds, int searchRadius)
+    {
+        var horizontalInset = Math.Max(2, bounds.Width / 10);
+        var lineX = bounds.X + horizontalInset;
+        var lineWidth = bounds.Width - horizontalInset * 2;
+        if (lineWidth < 20 || bounds.Height < 20)
+            return bounds;
+
+        // The reported crop extends too far downward. Search only above its
+        // current bottom so this pass can reduce height, never increase it.
+        var originalBottomRow = bounds.Bottom - 1;
+        var firstEdgeRow = Math.Max(0, originalBottomRow - searchRadius);
+        var bestEdgeRow = originalBottomRow;
+        var originalStrength = CountEdges(edges, new Rect(lineX, originalBottomRow, lineWidth, 1)) /
+                               (double)lineWidth;
+        var bestStrength = originalStrength;
+
+        for (var row = firstEdgeRow; row < originalBottomRow; row++)
+        {
+            var strength = CountEdges(edges, new Rect(lineX, row, lineWidth, 1)) /
+                           (double)lineWidth;
+            if (strength > bestStrength)
+            {
+                bestEdgeRow = row;
+                bestStrength = strength;
+            }
+        }
+
+        var meaningfulImprovement = bestEdgeRow < originalBottomRow &&
+                                    bestStrength - originalStrength >= 0.04 &&
+                                    bestStrength >= originalStrength * 1.25 &&
+                                    bestStrength >= 0.05;
+        if (!meaningfulImprovement)
+            return bounds;
+
+        // The selected edge row is the final foreground row, so the bottom
+        // coordinate is exclusive and sits one pixel after that edge.
+        var bottomExclusive = bestEdgeRow + 1;
+        if (bottomExclusive <= bounds.Y || bottomExclusive >= bounds.Bottom)
+            return bounds;
+
+        return new Rect(bounds.X, bounds.Y, bounds.Width, bottomExclusive - bounds.Y);
     }
 
     private static double MeasureRectangleGeometry(Mat edges, Rect rect)
