@@ -5,6 +5,16 @@ namespace Inlay.Cli;
 
 public sealed record CropRectangle(int X, int Y, int Width, int Height);
 
+public sealed record RunOptions(
+    string Input,
+    string? Output,
+    bool Recursive,
+    bool Preview,
+    CropRectangle? Rectangle,
+    bool KeepCorners,
+    bool Report,
+    bool Overwrite);
+
 public static class Arguments
 {
     public static RootCommand CreateCommand()
