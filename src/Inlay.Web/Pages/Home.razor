@@ -187,15 +187,24 @@
                         <button class="subtle-button" @onclick="DownloadDiagnostics" title="Exports metadata only. The image and filename are never included.">Export diagnostics</button>
                     </div>
                 </div>
-                <p class="editor-help">Drag inside the rectangle to move it. Pull an edge or corner handle to resize. Changes appear in the preview as you drag.</p>
+                <p class="editor-help">Enter exact source-image pixel values, or drag the selection. The crop must stay inside the original image.</p>
+                <div class="crop-fields">
+                    <label>X <input type="number" inputmode="numeric" min="0" max="@Math.Max(0, sourceWidth - 1)" @bind="cropX" /></label>
+                    <label>Y <input type="number" inputmode="numeric" min="0" max="@Math.Max(0, sourceHeight - 1)" @bind="cropY" /></label>
+                    <label>Width <input type="number" inputmode="numeric" min="1" max="@sourceWidth" @bind="cropWidth" /></label>
+                    <label>Height <input type="number" inputmode="numeric" min="1" max="@sourceHeight" @bind="cropHeight" /></label>
+                </div>
                 <label class="radius-control">
                     <span>Corner radius <strong @ref="cornerRadiusValue">@cornerRadius px</strong></span>
-                    <input @ref="cornerRadiusSlider" type="range" min="0" max="@(Math.Min(cropWidth, cropHeight) / 2)" value="@cornerRadius" />
+                    <div class="radius-control-inputs">
+                        <input @ref="cornerRadiusSlider" type="range" min="0" max="@(Math.Min(cropWidth, cropHeight) / 2)" value="@cornerRadius" />
+                        <input class="radius-number" type="number" inputmode="numeric" min="0" max="@(Math.Min(cropWidth, cropHeight) / 2)" @bind="cornerRadius" aria-label="Corner radius in pixels" />
+                    </div>
                 </label>
-                @if (!string.IsNullOrEmpty(validationMessage))
-                {
-                    <p class="editor-validation">@validationMessage</p>
-                }
+                <div class="editor-actions">
+                    <span class="editor-validation">@validationMessage</span>
+                    <button class="apply" @onclick="ApplyCrop">Update preview <span>↗</span></button>
+                </div>
             </section>
 
             <div class="result-footer">

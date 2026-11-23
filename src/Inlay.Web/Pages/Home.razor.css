@@ -351,7 +351,7 @@ footer {
 }
 .crop-fields {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
     margin-top: 18px;
 }
@@ -436,7 +436,7 @@ footer {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
     .crop-fields label:last-child {
-        grid-column: span 2;
+        grid-column: auto;
     }
     .editor-actions {
         align-items: stretch;
@@ -1020,11 +1020,36 @@ footer {
     color: #c13584;
     font-variant-numeric: tabular-nums;
 }
-.radius-control input {
+.radius-control-inputs {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.radius-control input[type="range"] {
+    flex: 1;
+    min-width: 0;
     width: 100%;
     margin: 0;
     accent-color: #c13584;
     cursor: pointer;
+}
+.radius-control .radius-number {
+    flex: 0 0 88px;
+    width: 88px;
+    min-width: 0;
+    padding: 8px 9px;
+    border: 1px solid #dbdbdb;
+    border-radius: 8px;
+    outline: none;
+    background: #fafafa;
+    color: #262626;
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+}
+.radius-control .radius-number:focus {
+    border-color: #c13584;
+    box-shadow: 0 0 0 2px #c1358420;
 }
 .editor-validation {
     margin: 12px 0 0;
@@ -1036,6 +1061,11 @@ html[data-theme="dark"] .crop-meta span:first-child {
 }
 html[data-theme="dark"] .radius-control {
     color: #b0b0b0;
+}
+html[data-theme="dark"] .radius-control .radius-number {
+    border-color: #504b58;
+    background: #302d36;
+    color: #f5f5f5;
 }
 html[data-theme="dark"] .crop-handle {
     background: #f5f5f5;
@@ -1055,6 +1085,9 @@ html[data-theme="dark"] .crop-handle {
         grid-template-columns: 1fr;
         gap: 8px;
         max-width: none;
+    }
+    .radius-control-inputs {
+        width: 100%;
     }
 }
 
