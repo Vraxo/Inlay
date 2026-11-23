@@ -96,11 +96,12 @@ public partial class Home : IDisposable
         isDarkTheme = await JS.InvokeAsync<bool>("inlay.toggleTheme");
     }
     private int SuccessfulCount => images.Count(image => image.CropBytes is not null);
+    private int ReadyCount => images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status == DetectionStatus.Extracted);
     private int ReviewCount => images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status != DetectionStatus.Extracted);
     private int FailedCount => images.Count(image => image.Status == BatchStatus.Failed);
     private int CompletedCount => images.Count(image => image.IsComplete);
-    private int BatchProgressPercent => images.Count == 0 ? 0 : (int)Math.Round(CompletedCount * 100d / images.Count);
-    private string BatchProgressStyle => $"width: {BatchProgressPercent}%";
+    private string BatchSegmentStyle(int count) =>
+        $"width: {(images.Count == 0 ? 0 : count * 100d / images.Count):0.##}%";
     private bool HasResults => images.Count > 0;
 
     private static string GetStatusClass(DetectionResult? result) => result?.Status switch
