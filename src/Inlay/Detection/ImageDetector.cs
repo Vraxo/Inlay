@@ -70,8 +70,7 @@ public sealed class ImageDetector
             var boundary = MeasureBoundaryContinuity(edges, bounds);
             var edgeStrength = MeasureEdgeStrength(gray, bounds);
             var sharpness = MeasureSharpnessContrast(gray, bounds);
-            var radius = EstimateCornerRadius(contour, bounds);
-            var cornerFit = radius > 0 ? 0.85 : 0.65;
+            const double cornerFit = 0.65;
 
             var areaFit = Math.Clamp(1.0 - Math.Abs(areaRatio - 0.35) / 0.65, 0.25, 1.0);
             var confidence = boundary * 0.34 + edgeStrength * 0.18 + geometry * 0.18 +
@@ -79,7 +78,7 @@ public sealed class ImageDetector
 
             var candidate = new DetectionCandidate(
                 ScaleRect(bounds, 1.0 / scale), confidence, boundary, edgeStrength,
-                geometry, sharpness, cornerFit, (int)Math.Round(radius / scale), areaRatio);
+                geometry, sharpness, cornerFit, 0, areaRatio);
 
             if (candidates.All(existing => IntersectionOverUnion(existing.Bounds, candidate.Bounds) < 0.82))
                 candidates.Add(candidate);
@@ -123,6 +122,8 @@ public sealed class ImageDetector
         Cv2.BitwiseOr(sourceStrongEdges, sourceSoftEdges, sourceEdges);
         finalBounds = RefineTopBoundary(sourceEdges, finalBounds, 4);
         finalBounds = RefineBottomBoundary(sourceEdges, finalBounds, 6);
+        var finalCornerRadius = EstimateCornerRadius(sourceEdges, finalBounds);
+        var finalCornerFit = finalCornerRadius > 0 ? 0.85 : 0.65;
 
         // Confidence must describe the rectangle shown to the user, not the
         // original contour that was used to discover its vertical position.
@@ -136,7 +137,7 @@ public sealed class ImageDetector
         // The final score emphasizes the crop's four actual borders. Interior
         // texture and sharpness are supporting evidence, not proof of alignment.
         var finalConfidence = finalBoundary * 0.42 + finalEdgeStrength * 0.08 + finalGeometry * 0.20 +
-                              finalSharpness * 0.13 + best.CornerFit * 0.07 + finalAreaFit * 0.10;
+                              finalSharpness * 0.13 + finalCornerFit * 0.07 + finalAreaFit * 0.10;
         best = best with
         {
             Bounds = finalBounds,
@@ -145,6 +146,8 @@ public sealed class ImageDetector
             EdgeStrength = finalEdgeStrength,
             GeometryFit = finalGeometry,
             SharpnessContrast = finalSharpness,
+            CornerFit = finalCornerFit,
+            CornerRadius = finalCornerRadius,
             AreaRatio = finalAreaRatio
         };
 
@@ -407,33 +410,103 @@ public sealed class ImageDetector
         return Math.Clamp(0.5 + contrast * 0.9, 0, 1);
     }
 
-    private static double EstimateCornerRadius(Point[] contour, Rect bounds)
+    private static int EstimateCornerRadius(Mat edges, Rect bounds)
     {
-        var radii = new List<double>(4);
-        var marginX = bounds.Width * 0.28;
-        var marginY = bounds.Height * 0.28;
-        foreach (var (cornerX, cornerY, left, top) in new[]
+        var maximumRadius = (int)(Math.Min(bounds.Width, bounds.Height) * 0.15);
+        if (maximumRadius < 8)
+            return 0;
+
+        var estimates = new List<int>(4);
+        foreach (var (horizontalSign, verticalSign) in new[]
         {
-            (bounds.Left, bounds.Top, true, true),
-            (bounds.Right - 1, bounds.Top, false, true),
-            (bounds.Left, bounds.Bottom - 1, true, false),
-            (bounds.Right - 1, bounds.Bottom - 1, false, false)
+            (-1, -1),
+            (1, -1),
+            (1, 1),
+            (-1, 1)
         })
         {
-            var points = contour.Where(p =>
-                (left ? p.X <= bounds.Left + marginX : p.X >= bounds.Right - marginX) &&
-                (top ? p.Y <= bounds.Top + marginY : p.Y >= bounds.Bottom - marginY));
-            var distance = points.Select(p => Math.Sqrt(Math.Pow(p.X - cornerX, 2) + Math.Pow(p.Y - cornerY, 2)))
-                .DefaultIfEmpty(0).Min();
-            radii.Add(distance);
+            var scores = new List<(int Radius, double Coverage)>(maximumRadius - 7);
+            for (var radius = 8; radius <= maximumRadius; radius++)
+            {
+                var coverage = MeasureCornerArcCoverage(edges, bounds, radius, horizontalSign, verticalSign);
+                scores.Add((radius, coverage));
+            }
+
+            var strongestCoverage = scores.Max(score => score.Coverage);
+            if (strongestCoverage < 0.60)
+                continue;
+
+            // A few adjacent radii can score equally because edges are rasterized.
+            // The center of that plateau is a steadier estimate than its first pixel.
+            var plateau = scores
+                .Where(score => score.Coverage >= strongestCoverage - 0.03)
+                .Select(score => score.Radius)
+                .ToArray();
+            estimates.Add((int)Math.Round(plateau.Average()));
         }
 
-        var positive = radii.Where(x => x >= 3).ToArray();
-        if (positive.Length < 3)
+        if (estimates.Count < 3)
             return 0;
-        var median = positive.Order().ElementAt(positive.Length / 2);
-        var deviation = positive.Max(x => Math.Abs(x - median));
-        return deviation <= Math.Max(5, median * 0.35) ? Math.Clamp(median, 0, Math.Min(bounds.Width, bounds.Height) * 0.15) : 0;
+
+        estimates.Sort();
+        var middle = estimates.Count / 2;
+        var median = estimates.Count % 2 == 0
+            ? (estimates[middle - 1] + estimates[middle]) / 2.0
+            : estimates[middle];
+        var tolerance = Math.Max(5, median * 0.20);
+        var consistent = estimates.Where(radius => Math.Abs(radius - median) <= tolerance).ToArray();
+        if (consistent.Length < 3)
+            return 0;
+
+        return (int)Math.Round(consistent.Average());
+    }
+
+    private static double MeasureCornerArcCoverage(
+        Mat edges,
+        Rect bounds,
+        int radius,
+        int horizontalSign,
+        int verticalSign)
+    {
+        var centerX = horizontalSign < 0
+            ? bounds.Left + radius
+            : bounds.Right - 1 - radius;
+        var centerY = verticalSign < 0
+            ? bounds.Top + radius
+            : bounds.Bottom - 1 - radius;
+        var sampleCount = Math.Clamp(radius / 3, 6, 32);
+        var firstAngle = Math.PI / 6;
+        var lastAngle = Math.PI / 3;
+        var hits = 0;
+
+        for (var sample = 0; sample <= sampleCount; sample++)
+        {
+            var angle = firstAngle + (lastAngle - firstAngle) * sample / sampleCount;
+            var x = (int)Math.Round(centerX + horizontalSign * radius * Math.Cos(angle));
+            var y = (int)Math.Round(centerY + verticalSign * radius * Math.Sin(angle));
+            if (HasNearbyEdge(edges, x, y))
+                hits++;
+        }
+
+        return hits / (double)(sampleCount + 1);
+    }
+
+    private static bool HasNearbyEdge(Mat edges, int x, int y)
+    {
+        for (var offsetY = -1; offsetY <= 1; offsetY++)
+        {
+            for (var offsetX = -1; offsetX <= 1; offsetX++)
+            {
+                var sampleX = x + offsetX;
+                var sampleY = y + offsetY;
+                if (sampleX >= 0 && sampleX < edges.Width &&
+                    sampleY >= 0 && sampleY < edges.Height &&
+                    edges.At<byte>(sampleY, sampleX) != 0)
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     private static Rect ScaleRect(Rect rect, double scale) => new(
