@@ -105,8 +105,11 @@ public sealed class ImageDetector
         // rectangle win. Only adjust X after the best vertical candidate is chosen.
         var best = ranked[0];
         var analysisBounds = ScaleRect(best.Bounds, scale);
-        var refinedBounds = RefineHorizontalBounds(edges, analysisBounds);
-        best = best with { Bounds = ScaleRect(refinedBounds, 1.0 / scale) };
+        var refinedBounds = ScaleRect(RefineHorizontalBounds(edges, analysisBounds), 1.0 / scale);
+        best = best with
+        {
+            Bounds = new Rect(refinedBounds.X, best.Bounds.Y, refinedBounds.Width, best.Bounds.Height)
+        };
 
         var second = ranked.Length > 1 ? ranked[1] : null;
         var margin = second is null ? 1.0 : best.Confidence - second.Confidence;
