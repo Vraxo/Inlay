@@ -11,8 +11,12 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <ProjectReference Include="../../src/Inlay.Core/Inlay.Core.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="../../src/Inlay/Inlay.csproj" />
+  <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
+    <PackageReference Include="OpenCvSharp5.runtime.win" Version="5.1.0.20261115" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
+    <PackageReference Include="OpenCvSharp5.official.runtime.linux-x64.slim" Version="5.1.0.20261115" />
   </ItemGroup>
 </Project>

@@ -3,18 +3,6 @@ using Inlay.Processing;
 
 namespace Inlay.Cli;
 
-public sealed record CropRectangle(int X, int Y, int Width, int Height);
-
-public sealed record RunOptions(
-    string Input,
-    string? Output,
-    bool Recursive,
-    bool Preview,
-    CropRectangle? Rectangle,
-    bool KeepCorners,
-    bool Report,
-    bool Overwrite);
-
 public static class Arguments
 {
     public static RootCommand CreateCommand()
@@ -87,7 +75,7 @@ public static class Arguments
 
             try
             {
-                var summary = await new BatchProcessor().RunAsync(new RunOptions(
+                var summary = await new BatchProcessor().RunAsync(new BatchOptions(
                     input,
                     parseResult.GetValue(outputOption),
                     parseResult.GetValue(recursiveOption),
@@ -96,6 +84,24 @@ public static class Arguments
                     corners == "keep",
                     parseResult.GetValue(reportOption),
                     parseResult.GetValue(overwriteOption)));
+
+                foreach (var item in summary.Items)
+                {
+                    var message = item.Status switch
+                    {
+                        BatchItemStatus.Extracted => $"EXTRACT {item.Input} → {item.OutputPath}  ({item.Confidence:P0})",
+                        BatchItemStatus.Review => $"REVIEW  {item.Input} — {item.Message}",
+                        BatchItemStatus.Rejected => $"REJECT  {item.Input} — {item.Message}",
+                        BatchItemStatus.Skipped => $"SKIP    {item.Input} — {item.Message}",
+                        BatchItemStatus.Failed => $"FAILED  {item.Input} — {item.Message}",
+                        _ => item.Input
+                    };
+
+                    if (item.Status is BatchItemStatus.Skipped or BatchItemStatus.Failed)
+                        Console.Error.WriteLine(message);
+                    else
+                        Console.WriteLine(message);
+                }
 
                 Console.WriteLine();
                 Console.WriteLine($"Scanned {summary.Scanned}  |  Extracted {summary.Extracted}  |  Review {summary.Review}  |  Rejected {summary.Rejected}  |  Failed {summary.Failed}");
