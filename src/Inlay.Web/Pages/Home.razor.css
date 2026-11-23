@@ -741,18 +741,19 @@ footer {
 
 
 .header-actions { display:flex; align-items:center; gap:22px; }
-.theme-control { display:inline-flex; align-items:center; gap:8px; color:#737373; font-size:11px; }
-.theme-select { border:1px solid #dbdbdb; border-radius:7px; padding:7px 26px 7px 9px; background:#fff; color:#262626; font:inherit; cursor:pointer; }
 @media (max-width:520px) {
   .header-actions { gap:10px; }
   .local-note { font-size:0; }
   .local-note span { width:7px; height:7px; }
-  .theme-control { gap:5px; }
 }
 
 
 
 /* Compact, readable type system */
+/* Native buttons otherwise fall back to the browser's default button font. */
+.shell button {
+    font-family: inherit;
+}
 .shell {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 14px;
@@ -765,11 +766,6 @@ footer {
 .wordmark {
     font-size: 22px;
     font-weight: 700;
-    letter-spacing: normal;
-}
-.local-note, .theme-control {
-    font-size: 12px;
-    font-weight: 500;
     letter-spacing: normal;
 }
 .intro {
@@ -1203,11 +1199,6 @@ html[data-theme="dark"] .status.processing {
     font-size: 15px;
     line-height: 1;
 }
-.footer-repo-link {
-    min-height: 32px;
-    padding: 6px 9px;
-    font-size: 12px;
-}
 
 .download,
 .apply {
@@ -1262,5 +1253,47 @@ html[data-theme="dark"] .status.processing {
     }
     .footer-repo-link {
         font-size: 12px;
+    }
+}
+
+
+.theme-toggle {
+    display: inline-grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 1px solid #e5e5e5;
+    border-radius: 10px;
+    background: #fff;
+    color: #454545;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s, transform .15s;
+}
+.theme-toggle svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.theme-toggle:hover {
+    border-color: transparent;
+    background: linear-gradient(#fff, #fff) padding-box, var(--brand-gradient) border-box;
+    color: #262626;
+}
+.theme-toggle:active {
+    transform: scale(.94);
+}
+.theme-toggle:focus-visible {
+    outline: 2px solid rgba(193, 53, 132, .45);
+    outline-offset: 3px;
+}
+@media (max-width: 520px) {
+    .theme-toggle {
+        width: 36px;
+        height: 36px;
     }
 }

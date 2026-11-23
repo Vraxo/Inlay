@@ -20,7 +20,7 @@ public partial class Home : IDisposable
     private string error = "";
     private string validationMessage = "";
     private bool isProcessing;
-    private string themePreference = "system";
+    private bool isDarkTheme;
     private int sourceWidth;
     private int sourceHeight;
     private int cropX;
@@ -43,7 +43,7 @@ public partial class Home : IDisposable
     {
         if (firstRender)
         {
-            themePreference = await JS.InvokeAsync<string>("inlay.getThemePreference");
+            isDarkTheme = await JS.InvokeAsync<bool>("inlay.isDarkMode");
             StateHasChanged();
         }
 
@@ -88,10 +88,9 @@ public partial class Home : IDisposable
         cropEditorReference?.Dispose();
     }
 
-    private async Task ChangeTheme(ChangeEventArgs args)
+    private async Task ToggleTheme()
     {
-        themePreference = args.Value?.ToString() is "light" or "dark" ? args.Value.ToString()! : "system";
-        await JS.InvokeVoidAsync("inlay.setThemePreference", themePreference);
+        isDarkTheme = await JS.InvokeAsync<bool>("inlay.toggleTheme");
     }
     private int SuccessfulCount => images.Count(image => image.CropBytes is not null);
     private int ReviewCount => images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status != DetectionStatus.Extracted);

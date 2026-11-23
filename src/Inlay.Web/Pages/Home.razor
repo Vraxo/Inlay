@@ -11,14 +11,16 @@
         <div class="header-actions">
             <span class="local-note"><span></span> Runs on your device</span>
             <a class="repo-link" href="https://github.com/Vraxo/Inlay" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
-            <label class="theme-control">
-                <span>Theme</span>
-                <select class="theme-select" aria-label="Color theme" value="@themePreference" @onchange="ChangeTheme">
-                    <option value="system">System</option>
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                </select>
-            </label>
+            <button type="button" class="theme-toggle" aria-label="@(isDarkTheme ? "Switch to light mode" : "Switch to dark mode")" title="@(isDarkTheme ? "Switch to light mode" : "Switch to dark mode")" @onclick="ToggleTheme">
+                @if (isDarkTheme)
+                {
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"></path></svg>
+                }
+                else
+                {
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.1 15.4A8.5 8.5 0 0 1 8.6 3.9 8.5 8.5 0 1 0 20.1 15.4Z"></path></svg>
+                }
+            </button>
         </div>
     </header>
 
@@ -204,6 +206,5 @@
     <footer>
         <span>Inlay <span class="muted">· Early browser version</span></span>
         <span>OpenCV · WebAssembly · No uploads</span>
-        <a class="repo-link footer-repo-link" href="https://github.com/Vraxo/Inlay" target="_blank" rel="noopener noreferrer">Source code <span aria-hidden="true">↗</span></a>
     </footer>
 </main>

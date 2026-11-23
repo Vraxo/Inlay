@@ -159,11 +159,6 @@ html[data-theme="dark"] .shell .batch-item-info strong { color: #f5f5f5; }
 html[data-theme="dark"] .shell .batch-item > img,
 html[data-theme="dark"] .shell .batch-placeholder { background: #303030; }
 html[data-theme="dark"] .shell footer { border-top-color: #343434; }
-html[data-theme="dark"] .shell .theme-select {
-    border-color: #414141;
-    background: #292929;
-    color: #f5f5f5;
-}
 html[data-theme="dark"] .shell .subtle-button {
     background: #303030;
     color: #eee;
@@ -202,4 +197,16 @@ html[data-theme="dark"] .shell .batch-item.selected {
     border-color: transparent;
     background: linear-gradient(#2a2229, #2a2229) padding-box, var(--brand-gradient-hover) border-box;
     box-shadow: none;
+}
+
+
+html[data-theme="dark"] .shell .theme-toggle {
+    border-color: #414141;
+    background: #292929;
+    color: #f0f0f0;
+}
+html[data-theme="dark"] .shell .theme-toggle:hover {
+    border-color: transparent;
+    background: linear-gradient(#292929, #292929) padding-box, var(--brand-gradient-hover) border-box;
+    color: #fff;
 }
