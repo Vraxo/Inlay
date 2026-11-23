@@ -262,33 +262,29 @@ public sealed class ImageDetector
         if (lineWidth < 20 || bounds.Height < 20)
             return bounds;
 
-        var originalStrength = CountEdges(edges, new Rect(lineX, bounds.Y, lineWidth, 1)) /
-                               (double)lineWidth;
-        var bestY = bounds.Y;
-        var bestStrength = originalStrength;
+        // Canny locates the transition on the final background row. The crop
+        // begins on the following row, so convert edge rows to pixel bounds.
+        var firstEdgeRow = Math.Max(0, bounds.Y - searchRadius - 1);
+        var lastEdgeRow = Math.Min(edges.Height - 1, bounds.Y + searchRadius - 1);
+        var bestEdgeRow = bounds.Y - 1;
+        var bestStrength = bestEdgeRow >= 0
+            ? CountEdges(edges, new Rect(lineX, bestEdgeRow, lineWidth, 1)) / (double)lineWidth
+            : 0;
 
-        // The currently observed error is an over-high top edge. Search only
-        // below it, and only a few source pixels, to avoid unrelated lines.
-        for (var offset = 1; offset <= searchRadius; offset++)
+        for (var row = firstEdgeRow; row <= lastEdgeRow; row++)
         {
-            var candidateY = bounds.Y + offset;
-            if (candidateY >= edges.Height)
-                break;
-
-            var strength = CountEdges(edges, new Rect(lineX, candidateY, lineWidth, 1)) /
+            var strength = CountEdges(edges, new Rect(lineX, row, lineWidth, 1)) /
                            (double)lineWidth;
             if (strength > bestStrength)
             {
-                bestY = candidateY;
+                bestEdgeRow = row;
                 bestStrength = strength;
             }
         }
 
-        var meaningfulImprovement = bestStrength - originalStrength >= 0.04 &&
-                                    bestStrength >= originalStrength * 1.5 &&
-                                    bestStrength >= 0.05;
-        return bestY != bounds.Y && meaningfulImprovement
-            ? new Rect(bounds.X, bestY, bounds.Width, bounds.Height)
+        var refinedY = bestEdgeRow + 1;
+        return bestStrength >= 0.05 && refinedY != bounds.Y
+            ? new Rect(bounds.X, refinedY, bounds.Width, bounds.Height)
             : bounds;
     }
 
