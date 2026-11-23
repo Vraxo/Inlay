@@ -897,11 +897,22 @@ footer {
 
 /* Direct-manipulation crop editor */
 .crop-edit-frame {
-    min-height: 250px;
+    min-height: 0;
     padding: 12px;
+    display: block;
+    overflow: hidden;
+}
+.crop-viewport {
+    position: relative;
     display: grid;
     place-items: center;
+    width: 100%;
+    height: min(480px, 62vh);
+    min-height: 250px;
     overflow: hidden;
+    touch-action: none;
+    background: #f0f0f0;
+    cursor: default;
 }
 .crop-stage {
     position: relative;
@@ -911,6 +922,8 @@ footer {
     line-height: 0;
     user-select: none;
     -webkit-user-select: none;
+    transform-origin: center center;
+    will-change: transform;
 }
 .crop-stage > img {
     display: block;
@@ -921,20 +934,45 @@ footer {
     object-fit: contain;
     pointer-events: none;
 }
-.crop-magnifier {
-    position: absolute;
-    z-index: 5;
-    display: none;
-    width: 200px;
-    height: 200px;
-    border: 3px solid #fff;
-    border-radius: 50%;
-    outline: 2px solid #c13584;
-    background: #17151b;
-    box-shadow: 0 5px 22px rgba(0,0,0,.38);
-    pointer-events: none;
+.crop-viewport.pan-ready { cursor: grab; }
+.crop-viewport.is-panning { cursor: grabbing; }
+.crop-zoom-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding-top: 10px;
 }
-.crop-magnifier.visible { display: block; }
+.crop-zoom-toolbar > span {
+    color: #858585;
+    font-size: 11px;
+}
+.crop-zoom-presets {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.crop-zoom-presets button {
+    min-width: 40px;
+    padding: 5px 8px;
+    border: 1px solid #e5e5e5;
+    border-radius: 7px;
+    background: #fff;
+    color: #555;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.crop-zoom-presets button[aria-pressed="true"] {
+    border-color: #c13584;
+    background: #fbedf4;
+    color: #9b286b;
+}
+.crop-zoom-presets button:focus-visible {
+    outline: 2px solid rgba(193, 53, 132, .45);
+    outline-offset: 2px;
+}
 .crop-selection {
     position: absolute;
     border: 1px solid rgba(255,255,255,.96);
@@ -1382,4 +1420,17 @@ html[data-theme="dark"] .status.processing {
     .dropzone::after {
         transition: none;
     }
+}
+
+
+html[data-theme="dark"] .crop-viewport { background: #181818; }
+html[data-theme="dark"] .crop-zoom-presets button {
+    border-color: #414141;
+    background: #292929;
+    color: #ddd;
+}
+html[data-theme="dark"] .crop-zoom-presets button[aria-pressed="true"] {
+    border-color: #c13584;
+    background: #382333;
+    color: #ffadd2;
 }
