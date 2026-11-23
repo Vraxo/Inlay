@@ -73,7 +73,7 @@ public sealed class ImageDetector
             var radius = EstimateCornerRadius(contour, bounds);
             var cornerFit = radius > 0 ? 0.85 : 0.65;
 
-            var areaFit = Math.Clamp(1.0 - Math.Abs(areaRatio - 0.35) / 0.65, 0.25, 1.0);
+            var finalAreaFit = Math.Clamp(1.0 - Math.Abs(finalAreaRatio - 0.35) / 0.65, 0.25, 1.0);
             var confidence = boundary * 0.34 + edgeStrength * 0.18 + geometry * 0.18 +
                              sharpness * 0.18 + cornerFit * 0.07 + areaFit * 0.05;
 
@@ -111,24 +111,24 @@ public sealed class ImageDetector
 
         // Confidence must describe the rectangle shown to the user, not the
         // original contour that was used to discover its vertical position.
-        var boundary = MeasureBoundaryContinuity(edges, refinedAnalysisBounds);
-        var edgeStrength = MeasureEdgeStrength(gray, refinedAnalysisBounds);
-        var geometry = MeasureRectangleGeometry(edges, refinedAnalysisBounds);
-        var sharpness = MeasureSharpnessContrast(gray, refinedAnalysisBounds);
-        var areaRatio = (double)(refinedAnalysisBounds.Width * refinedAnalysisBounds.Height) /
+        var finalBoundary = MeasureBoundaryContinuity(edges, refinedAnalysisBounds);
+        var finalEdgeStrength = MeasureEdgeStrength(gray, refinedAnalysisBounds);
+        var finalGeometry = MeasureRectangleGeometry(edges, refinedAnalysisBounds);
+        var finalSharpness = MeasureSharpnessContrast(gray, refinedAnalysisBounds);
+        var finalAreaRatio = (double)(refinedAnalysisBounds.Width * refinedAnalysisBounds.Height) /
                         (analysis.Width * analysis.Height);
         var areaFit = Math.Clamp(1.0 - Math.Abs(areaRatio - 0.35) / 0.65, 0.25, 1.0);
-        var confidence = boundary * 0.34 + edgeStrength * 0.18 + geometry * 0.18 +
-                         sharpness * 0.18 + best.CornerFit * 0.07 + areaFit * 0.05;
+        var finalConfidence = finalBoundary * 0.34 + finalEdgeStrength * 0.18 + finalGeometry * 0.18 +
+                              finalSharpness * 0.18 + best.CornerFit * 0.07 + finalAreaFit * 0.05;
         best = best with
         {
             Bounds = finalBounds,
-            Confidence = confidence,
-            BoundaryContinuity = boundary,
-            EdgeStrength = edgeStrength,
-            GeometryFit = geometry,
-            SharpnessContrast = sharpness,
-            AreaRatio = areaRatio
+            Confidence = finalConfidence,
+            BoundaryContinuity = finalBoundary,
+            EdgeStrength = finalEdgeStrength,
+            GeometryFit = finalGeometry,
+            SharpnessContrast = finalSharpness,
+            AreaRatio = finalAreaRatio
         };
 
         var second = ranked.Length > 1 ? ranked[1] : null;
