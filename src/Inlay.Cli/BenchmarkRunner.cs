@@ -64,7 +64,7 @@ internal static class BenchmarkRunner
         return results.All(result => result.Passed) ? 0 : 1;
     }
 
-    internal static double IntersectionOverUnion(BenchmarkBounds expected, Rect actual)
+    private static double IntersectionOverUnion(BenchmarkBounds expected, Rect actual)
     {
         var left = Math.Max(expected.X, actual.X);
         var top = Math.Max(expected.Y, actual.Y);
