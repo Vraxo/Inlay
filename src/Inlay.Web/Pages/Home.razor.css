@@ -921,6 +921,20 @@ footer {
     object-fit: contain;
     pointer-events: none;
 }
+.crop-magnifier {
+    position: absolute;
+    z-index: 5;
+    display: none;
+    width: 200px;
+    height: 200px;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    outline: 2px solid #c13584;
+    background: #17151b;
+    box-shadow: 0 5px 22px rgba(0,0,0,.38);
+    pointer-events: none;
+}
+.crop-magnifier.visible { display: block; }
 .crop-selection {
     position: absolute;
     border: 1px solid rgba(255,255,255,.96);
@@ -1119,9 +1133,24 @@ html[data-theme="dark"] .crop-handle {
     display: block;
     height: 100%;
     border-radius: inherit;
-    background: var(--brand-gradient);
     transition: width .18s ease;
 }
+.batch-overall-track {
+    display: flex;
+    max-width: 100%;
+    height: 7px;
+    gap: 2px;
+    background: #e8e8e8;
+}
+.batch-overall-segment {
+    flex: 0 0 auto;
+    min-width: 0;
+}
+.batch-overall-segment.ready { background: #269b63; }
+.batch-overall-segment.review { background: #d49a32; }
+.batch-overall-segment.failed { background: #d65367; }
+.batch-overall-segment:first-child { border-radius: 999px 0 0 999px; }
+.batch-overall-segment:last-child { border-radius: 0 999px 999px 0; }
 .batch-item.pending {
     cursor: wait;
 }
