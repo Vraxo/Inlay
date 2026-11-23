@@ -298,7 +298,6 @@ public partial class Home : IDisposable
             image.SourceBytes = null;
             image.CropBytes = null;
             image.SourcePreview = "";
-            image.CropPreview = "";
             image.ThumbnailPreview = "";
             await RefreshBatchAsync();
         }
@@ -326,7 +325,6 @@ public partial class Home : IDisposable
                 continue;
 
             other.SourcePreview = "";
-            other.CropPreview = "";
         }
 
         activeImage = image;
@@ -338,7 +336,6 @@ public partial class Home : IDisposable
         cropHeight = image.CropHeight;
         cornerRadius = image.CornerRadius;
         image.SourcePreview = CreateDataUrl(image.SourceBytes!, image.SourceContentType);
-        image.CropPreview = image.CropBytes is null ? "" : CreateDataUrl(image.CropBytes, "image/png");
         cropEditorNeedsInitialization = true;
         validationMessage = "";
     }
@@ -376,7 +373,6 @@ public partial class Home : IDisposable
             return;
 
         activeImage.CropBytes = null;
-        activeImage.CropPreview = "";
         activeImage.ThumbnailPreview = "";
 
         if (cropX < 0 || cropY < 0 || cropWidth <= 0 || cropHeight <= 0 ||
@@ -396,14 +392,12 @@ public partial class Home : IDisposable
         try
         {
             activeImage.CropBytes = CreateCrop(activeImage, cropX, cropY, cropWidth, cropHeight, cornerRadius);
-            activeImage.CropPreview = CreateDataUrl(activeImage.CropBytes, "image/png");
             activeImage.ThumbnailPreview = CreateThumbnail(activeImage.CropBytes);
             SaveActiveImage();
         }
         catch (Exception exception)
         {
             activeImage.CropBytes = null;
-            activeImage.CropPreview = "";
             activeImage.ThumbnailPreview = "";
             validationMessage = $"Could not create crop: {exception.Message}";
         }
@@ -518,7 +512,6 @@ public partial class Home : IDisposable
         public byte[]? CropBytes { get; set; }
         public string SourceContentType { get; set; } = "image/png";
         public string SourcePreview { get; set; } = "";
-        public string CropPreview { get; set; } = "";
         public string ThumbnailPreview { get; set; } = "";
         public int SourceWidth { get; set; }
         public int SourceHeight { get; set; }
@@ -534,5 +527,4 @@ public partial class Home : IDisposable
         public bool CanSelect => Status == BatchStatus.Completed && SourceBytes is not null && SourceWidth > 0 && SourceHeight > 0;
         public DetectionResult? Detection { get; set; }
     }
-}
 }
