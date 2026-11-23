@@ -11,7 +11,7 @@ namespace Inlay.Web.Pages;
 public partial class Home
 {
     private const long MaximumFileSize = 25 * 1024 * 1024;
-    private const long MaximumBatchSize = 100 * 1024 * 1024;
+    private const long MaximumBatchSize = 50 * 1024 * 1024;
     private const int MaximumFiles = 20;
 
     private readonly ImageDetector detector = new();
@@ -30,7 +30,8 @@ public partial class Home
 
     private string StatusClass => GetStatusClass(activeImage?.Detection);
     private int SuccessfulCount => images.Count(image => image.CropBytes is not null);
-    private int ReviewCount => images.Count(image => image.Detection?.Status != DetectionStatus.Extracted || image.Detection?.Best is null);
+    private int ReviewCount => images.Count(image => image.Error.Length == 0 && (image.Detection?.Status != DetectionStatus.Extracted || image.Detection?.Best is null));
+    private int FailedCount => images.Count(image => image.Error.Length > 0);
     private bool HasResults => images.Count > 0;
 
     private static string GetStatusClass(DetectionResult? result) => result?.Status switch
@@ -73,7 +74,7 @@ public partial class Home
 
         if (files.Sum(file => file.Size) > MaximumBatchSize)
         {
-            error = "The selected files exceed the 100 MB total batch limit. Choose fewer or smaller images.";
+            error = "The selected files exceed the 50 MB total batch limit. Choose fewer or smaller images.";
             return;
         }
 
@@ -190,6 +191,9 @@ public partial class Home
         validationMessage = "";
         if (activeImage?.SourceBytes is null)
             return;
+
+        activeImage.CropBytes = null;
+        activeImage.CropPreview = "";
 
         if (cropX < 0 || cropY < 0 || cropWidth <= 0 || cropHeight <= 0 ||
             cropX >= sourceWidth || cropY >= sourceHeight ||
