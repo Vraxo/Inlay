@@ -53,9 +53,11 @@
             <section class="batch-summary">
                 <div class="batch-summary-info">
                     <strong>@CompletedCount / @images.Count finished</strong>
-                    <span>@SuccessfulCount ready · @ReviewCount to review · @FailedCount failed</span>
+                    <span>@ReadyCount ready · @ReviewCount to review · @FailedCount failed</span>
                     <div class="batch-overall-track" role="progressbar" aria-label="Batch completion" aria-valuemin="0" aria-valuemax="@images.Count" aria-valuenow="@CompletedCount">
-                        <span style="@BatchProgressStyle"></span>
+                        <span class="batch-overall-segment ready" style="@BatchSegmentStyle(ReadyCount)" title="@($"{ReadyCount} ready")"></span>
+                        <span class="batch-overall-segment review" style="@BatchSegmentStyle(ReviewCount)" title="@($"{ReviewCount} to review")"></span>
+                        <span class="batch-overall-segment failed" style="@BatchSegmentStyle(FailedCount)" title="@($"{FailedCount} failed")"></span>
                     </div>
                 </div>
                 <button class="download batch-download" @onclick="DownloadAll" disabled="@(SuccessfulCount == 0)">@(isProcessing ? "Download ready" : "Download all") <span>↓</span></button>
@@ -122,6 +124,7 @@
                     <div class="image-frame crop-edit-frame">
                         <div class="crop-stage" @ref="cropStage">
                             <img @ref="sourceImageElement" src="@activeImage.SourcePreview" alt="Original screenshot with draggable crop selection" draggable="false" />
+                            <canvas class="crop-magnifier" width="200" height="200" aria-hidden="true"></canvas>
                             <div class="crop-selection" @ref="cropSelection" role="group" aria-label="Crop selection. Drag to move; use the handles to resize." tabindex="0">
                                 <button type="button" class="crop-handle handle-n" data-handle="n" aria-label="Resize from top edge"></button>
                                 <button type="button" class="crop-handle handle-e" data-handle="e" aria-label="Resize from right edge"></button>
