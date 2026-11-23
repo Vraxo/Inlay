@@ -383,7 +383,7 @@
 
             editor.onSpaceDown = event => {
                 if (event.code !== "Space" || event.target instanceof HTMLElement &&
-                    (event.target.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(event.target.tagName)))
+                    (event.target.isContentEditable || event.target.closest("button, a, input, textarea, select")))
                     return;
                 editor.spacePressed = true;
                 if (editor.pointerInside) {
