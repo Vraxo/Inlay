@@ -282,7 +282,10 @@ public sealed class ImageDetector
             }
         }
 
-        var refinedY = bestEdgeRow + 1;
+        // If the strongest edge lies below the original candidate top,
+        // it marks the first foreground row. If it lies at/above that top,
+        // it marks the final background row and the crop starts one row later.
+        var refinedY = bestEdgeRow >= bounds.Y ? bestEdgeRow : bestEdgeRow + 1;
         return bestStrength >= 0.05 && refinedY != bounds.Y
             ? new Rect(bounds.X, refinedY, bounds.Width, bounds.Height)
             : bounds;
