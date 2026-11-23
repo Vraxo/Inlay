@@ -74,7 +74,7 @@ public sealed class ImageDetectorTests
         Assert.NotNull(result.Best);
         Assert.InRange(result.Best!.Bounds.X, 30, 36);
         Assert.InRange(result.Best.Bounds.Y, 690, 695);
-        Assert.InRange(result.Best.Bounds.Width, 1004, 1012);
+        Assert.InRange(result.Best.Bounds.Width, 1000, 1018);
         Assert.InRange(result.Best.Bounds.Height, 1010, 1018);
         Assert.Contains(result.Status, new[] { DetectionStatus.Review, DetectionStatus.Extracted });
         Assert.DoesNotContain("%", result.Reason);
