@@ -186,7 +186,7 @@
                 </div>
                 <p class="editor-help">Drag inside the rectangle to move it. Pull an edge or corner handle to resize. Changes appear in the preview as you drag.</p>
                 <label class="radius-control">
-                    <span>Corner radius <strong>@cornerRadius px</strong></span>
+                    <span>Corner radius <strong @ref="cornerRadiusValue">@cornerRadius px</strong></span>
                     <input @ref="cornerRadiusSlider" type="range" min="0" max="@(Math.Min(cropWidth, cropHeight) / 2)" value="@cornerRadius" />
                 </label>
                 @if (!string.IsNullOrEmpty(validationMessage))
