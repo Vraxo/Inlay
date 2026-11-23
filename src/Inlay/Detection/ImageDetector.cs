@@ -109,19 +109,35 @@ public sealed class ImageDetector
         var refinedBounds = ScaleRect(refinedAnalysisBounds, 1.0 / scale);
         var finalBounds = new Rect(refinedBounds.X, best.Bounds.Y, refinedBounds.Width, best.Bounds.Height);
 
-        // Confidence must describe the rectangle shown to the user, not the
-        // original contour that was used to discover its vertical position.
-        var finalBoundary = MeasureBoundaryContinuity(edges, refinedAnalysisBounds);
-        var finalEdgeStrength = MeasureEdgeStrength(gray, refinedAnalysisBounds);
-        var finalGeometry = MeasureRectangleGeometry(edges, refinedAnalysisBounds);
-        var finalSharpness = MeasureSharpnessContrast(gray, refinedAnalysisBounds);
-        var finalAreaRatio = (double)(refinedAnalysisBounds.Width * refinedAnalysisBounds.Height) /
-                        (analysis.Width * analysis.Height);
+        // Recheck the final top and bottom at source resolution. The analysis
+        // image is reduced for speed, which can lose one or two source pixels.
+        using var sourceGray = new Mat();
+        using var sourceBlurred = new Mat();
+        using var sourceStrongEdges = new Mat();
+        using var sourceSoftEdges = new Mat();
+        using var sourceEdges = new Mat();
+        Cv2.CvtColor(source, sourceGray, ColorConversionCodes.BGR2GRAY);
+        Cv2.GaussianBlur(sourceGray, sourceBlurred, new Size(3, 3), 0);
+        Cv2.Canny(sourceBlurred, sourceStrongEdges, 55, 145);
+        Cv2.Canny(sourceBlurred, sourceSoftEdges, 25, 75);
+        Cv2.BitwiseOr(sourceStrongEdges, sourceSoftEdges, sourceEdges);
+        finalBounds = RefineVerticalBounds(sourceEdges, finalBounds, 4);
+
+        // Confidence must describe the final source-resolution rectangle.
+        // Boundary support is measured with a small pixel tolerance so a
+        // one- or two-pixel offset does not turn a visually sound crop into
+        // a low-confidence candidate.
+        var finalBoundary = MeasureBoundaryContinuity(sourceEdges, finalBounds, 2);
+        var finalEdgeStrength = MeasureEdgeStrength(sourceGray, finalBounds);
+        var finalGeometry = MeasureRectangleGeometry(sourceEdges, finalBounds, 2);
+        var finalSharpness = MeasureSharpnessContrast(sourceGray, finalBounds);
+        var finalAreaRatio = (double)(finalBounds.Width * finalBounds.Height) /
+                             (source.Width * source.Height);
         var finalAreaFit = Math.Clamp(1.0 - Math.Abs(finalAreaRatio - 0.35) / 0.65, 0.25, 1.0);
         // The final score emphasizes the crop's four actual borders. Interior
         // texture and sharpness are supporting evidence, not proof of alignment.
-        var finalConfidence = finalBoundary * 0.42 + finalEdgeStrength * 0.08 + finalGeometry * 0.20 +
-                              finalSharpness * 0.13 + best.CornerFit * 0.07 + finalAreaFit * 0.10;
+        var finalConfidence = finalBoundary * 0.50 + finalEdgeStrength * 0.05 + finalGeometry * 0.25 +
+                              finalSharpness * 0.08 + best.CornerFit * 0.05 + finalAreaFit * 0.07;
         best = best with
         {
             Bounds = finalBounds,
@@ -244,33 +260,134 @@ public sealed class ImageDetector
         return wider.Bounds.Width > 0 ? wider.Bounds : bounds;
     }
 
-    private static double MeasureRectangleGeometry(Mat edges, Rect rect)
+    private static Rect RefineVerticalBounds(Mat edges, Rect bounds, int searchRadius)
     {
-        var thickness = Math.Max(1, Math.Min(3, Math.Min(rect.Width, rect.Height) / 100));
-        var top = CountEdges(edges, new Rect(rect.X, rect.Y, rect.Width, thickness)) /
-                  (rect.Width * (double)thickness);
-        var bottom = CountEdges(edges, new Rect(rect.X, rect.Bottom - thickness, rect.Width, thickness)) /
-                     (rect.Width * (double)thickness);
-        var left = CountEdges(edges, new Rect(rect.X, rect.Y, thickness, rect.Height)) /
-                   (rect.Height * (double)thickness);
-        var right = CountEdges(edges, new Rect(rect.Right - thickness, rect.Y, thickness, rect.Height)) /
-                    (rect.Height * (double)thickness);
+        var inset = Math.Max(2, bounds.Width / 10);
+        var lineX = bounds.X + inset;
+        var lineWidth = bounds.Width - inset * 2;
+        if (lineWidth < 20 || bounds.Height < 20)
+            return bounds;
 
-        // A good rectangle needs all four sides, not just a strong average
-        // that can hide one missing or misplaced edge.
-        return Math.Clamp(Math.Min(Math.Min(top, bottom), Math.Min(left, right)) * 3.0, 0, 1);
+        var top = FindBestHorizontalEdge(edges, lineX, bounds.Y, lineWidth, searchRadius);
+        var bottomRow = bounds.Bottom - 1;
+        var bottom = FindBestHorizontalEdge(edges, lineX, bottomRow, lineWidth, searchRadius);
+
+        var topY = ShouldUseNearbyEdge(top, bounds.Y) ? top.Row : bounds.Y;
+        var bottomY = ShouldUseNearbyEdge(bottom, bottomRow) ? bottom.Row : bottomRow;
+        if (bottomY - topY < bounds.Height * 0.8)
+            return bounds;
+
+        return new Rect(bounds.X, topY, bounds.Width, bottomY - topY + 1);
     }
 
-    private static double MeasureBoundaryContinuity(Mat edges, Rect rect)
+    private static (int Row, double Strength) FindBestHorizontalEdge(
+        Mat edges, int x, int row, int width, int searchRadius)
+    {
+        var currentRow = Math.Clamp(row, 0, edges.Height - 1);
+        var bestRow = currentRow;
+        var bestStrength = CountEdges(edges, new Rect(x, currentRow, width, 1)) / (double)width;
+
+        for (var offset = -searchRadius; offset <= searchRadius; offset++)
+        {
+            var candidateRow = row + offset;
+            if (candidateRow < 0 || candidateRow >= edges.Height)
+                continue;
+
+            var strength = CountEdges(edges, new Rect(x, candidateRow, width, 1)) / (double)width;
+            if (strength > bestStrength + 0.0001 ||
+                Math.Abs(strength - bestStrength) <= 0.0001 &&
+                Math.Abs(candidateRow - row) < Math.Abs(bestRow - row))
+            {
+                bestRow = candidateRow;
+                bestStrength = strength;
+            }
+        }
+
+        return (bestRow, bestStrength);
+    }
+
+    private static bool ShouldUseNearbyEdge((int Row, double Strength) candidate, int originalRow)
+    {
+        if (candidate.Row == originalRow || candidate.Strength < 0.025)
+            return false;
+
+        // Require a meaningful local improvement to avoid snapping to text or
+        // unrelated image detail near a soft outer edge.
+        var originalStrengthFloor = 0.005;
+        return candidate.Strength >= originalStrengthFloor &&
+               candidate.Strength > 0.025;
+    }
+
+    private static double MeasureRectangleGeometry(Mat edges, Rect rect, int tolerance)
     {
         var thickness = Math.Max(1, Math.Min(3, Math.Min(rect.Width, rect.Height) / 100));
-        var top = CountEdges(edges, new Rect(rect.X, rect.Y, rect.Width, thickness));
-        var bottom = CountEdges(edges, new Rect(rect.X, rect.Bottom - thickness, rect.Width, thickness));
-        var left = CountEdges(edges, new Rect(rect.X, rect.Y, thickness, rect.Height));
-        var right = CountEdges(edges, new Rect(rect.Right - thickness, rect.Y, thickness, rect.Height));
-        var horizontal = (top + bottom) / (2.0 * rect.Width * thickness);
-        var vertical = (left + right) / (2.0 * rect.Height * thickness);
-        return Math.Clamp((horizontal + vertical) * 0.5 * 2.2, 0, 1);
+        var horizontalInset = Math.Max(2, rect.Width / 10);
+        var verticalInset = Math.Max(2, rect.Height / 10);
+        var horizontalWidth = rect.Width - horizontalInset * 2;
+        var verticalHeight = rect.Height - verticalInset * 2;
+        if (horizontalWidth < 20 || verticalHeight < 20)
+            return 0;
+
+        var top = MeasureHorizontalBoundary(edges, rect.X + horizontalInset, rect.Y,
+            horizontalWidth, thickness, tolerance);
+        var bottom = MeasureHorizontalBoundary(edges, rect.X + horizontalInset, rect.Bottom - thickness,
+            horizontalWidth, thickness, tolerance);
+        var left = MeasureVerticalBoundary(edges, rect.X, rect.Y + verticalInset,
+            verticalHeight, thickness, tolerance);
+        var right = MeasureVerticalBoundary(edges, rect.Right - thickness, rect.Y + verticalInset,
+            verticalHeight, thickness, tolerance);
+
+        return Math.Clamp(Math.Min(Math.Min(top, bottom), Math.Min(left, right)) * 2.0, 0, 1);
+    }
+
+    private static double MeasureBoundaryContinuity(Mat edges, Rect rect, int tolerance)
+    {
+        var thickness = Math.Max(1, Math.Min(3, Math.Min(rect.Width, rect.Height) / 100));
+        var horizontalInset = Math.Max(2, rect.Width / 10);
+        var verticalInset = Math.Max(2, rect.Height / 10);
+        var horizontalWidth = rect.Width - horizontalInset * 2;
+        var verticalHeight = rect.Height - verticalInset * 2;
+        if (horizontalWidth < 20 || verticalHeight < 20)
+            return 0;
+
+        var top = MeasureHorizontalBoundary(edges, rect.X + horizontalInset, rect.Y,
+            horizontalWidth, thickness, tolerance);
+        var bottom = MeasureHorizontalBoundary(edges, rect.X + horizontalInset, rect.Bottom - thickness,
+            horizontalWidth, thickness, tolerance);
+        var left = MeasureVerticalBoundary(edges, rect.X, rect.Y + verticalInset,
+            verticalHeight, thickness, tolerance);
+        var right = MeasureVerticalBoundary(edges, rect.Right - thickness, rect.Y + verticalInset,
+            verticalHeight, thickness, tolerance);
+
+        return Math.Clamp((top + bottom + left + right) * 0.25 * 1.35, 0, 1);
+    }
+
+    private static double MeasureHorizontalBoundary(
+        Mat edges, int x, int row, int width, int thickness, int tolerance)
+    {
+        var best = 0.0;
+        for (var offset = -tolerance; offset <= tolerance; offset++)
+        {
+            var strength = CountEdges(edges, new Rect(x, row + offset, width, thickness)) /
+                           (width * (double)thickness);
+            best = Math.Max(best, strength);
+        }
+
+        return best;
+    }
+
+    private static double MeasureVerticalBoundary(
+        Mat edges, int column, int y, int height, int thickness, int tolerance)
+    {
+        var best = 0.0;
+        for (var offset = -tolerance; offset <= tolerance; offset++)
+        {
+            var strength = CountEdges(edges, new Rect(column + offset, y, thickness, height)) /
+                           (height * (double)thickness);
+            best = Math.Max(best, strength);
+        }
+
+        return best;
     }
 
     private static double CountEdges(Mat edges, Rect rect)
