@@ -35,7 +35,7 @@ internal static class BenchmarkRunner
         var positiveCases = results.Where(result => result.Expected is not null).ToArray();
         var detectedCases = positiveCases.Where(result => result.Actual is not null).ToArray();
         var geometryPasses = positiveCases.Count(result => result.Iou >= minimumIou);
-        var automaticPasses = positiveCases.Count(result => result.AutomaticallyExtracted);
+        var automaticPasses = positiveCases.Count(result => result.Passed);
         var falsePositives = results.Count(result => result.Expected is null && result.Actual is not null);
         var passedCases = results.Count(result => result.Passed);
 
