@@ -55,9 +55,7 @@
                     <strong>@CompletedCount / @images.Count finished</strong>
                     <span>@ReadyCount ready · @ReviewCount to review · @FailedCount failed</span>
                     <div class="batch-overall-track" role="progressbar" aria-label="Batch completion" aria-valuemin="0" aria-valuemax="@images.Count" aria-valuenow="@CompletedCount">
-                        <span class="batch-overall-segment ready" style="@BatchSegmentStyle(ReadyCount)" title="@($"{ReadyCount} ready")"></span>
-                        <span class="batch-overall-segment review" style="@BatchSegmentStyle(ReviewCount)" title="@($"{ReviewCount} to review")"></span>
-                        <span class="batch-overall-segment failed" style="@BatchSegmentStyle(FailedCount)" title="@($"{FailedCount} failed")"></span>
+                        <span style="@BatchProgressStyle"></span>
                     </div>
                 </div>
                 <button class="download batch-download" @onclick="DownloadAll" disabled="@(SuccessfulCount == 0)">@(isProcessing ? "Download ready" : "Download all") <span>↓</span></button>
