@@ -68,6 +68,7 @@
 
         editor.radiusControl.max = String(Math.floor(Math.min(editor.width, editor.height) / 2));
         editor.radiusControl.value = String(editor.radius);
+        editor.radiusValue.textContent = `${editor.radius} px`;
         editor.readout.textContent = `X ${editor.x} · Y ${editor.y} · ${editor.width} × ${editor.height} px`;
 
         drawPreview(editor);
@@ -160,6 +161,7 @@
         canvas,
         readout,
         radiusControl,
+        radiusValue,
         dotnet,
         sourceWidth,
         sourceHeight,
@@ -281,6 +283,7 @@
         editor.canvas = canvas;
         editor.readout = readout;
         editor.radiusControl = radiusControl;
+        editor.radiusValue = radiusValue;
         editor.dotnet = dotnet;
         editor.sourceWidth = sourceWidth;
         editor.sourceHeight = sourceHeight;

@@ -34,6 +34,7 @@ public partial class Home : IDisposable
     private ElementReference cropPreviewCanvas;
     private ElementReference cropReadout;
     private ElementReference cornerRadiusSlider;
+    private ElementReference cornerRadiusValue;
     private DotNetObjectReference<Home>? cropEditorReference;
     private bool cropEditorNeedsInitialization = true;
 
@@ -60,6 +61,7 @@ public partial class Home : IDisposable
             cropPreviewCanvas,
             cropReadout,
             cornerRadiusSlider,
+            cornerRadiusValue,
             cropEditorReference,
             sourceWidth,
             sourceHeight,
