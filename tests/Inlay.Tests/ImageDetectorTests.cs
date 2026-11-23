@@ -1,4 +1,5 @@
 using Inlay.Detection;
+using Inlay.Extraction;
 using OpenCvSharp;
 using Xunit;
 
@@ -73,9 +74,37 @@ public sealed class ImageDetectorTests
         Assert.Equal(693, result.Best!.Bounds.Y);
         Assert.Equal(1014, result.Best.Bounds.Height);
         Assert.Equal(1707, result.Best.Bounds.Bottom);
+        Assert.Equal(0, result.Best.CornerRadius);
         Assert.InRange(result.Best.Bounds.X, 30, 36);
         Assert.InRange(result.Best.Bounds.Width, 1000, 1018);
         Assert.Contains(result.Status, new[] { DetectionStatus.Review, DetectionStatus.Extracted });
+    }
+
+    [Fact]
+    public void DetectsRoundedCornersFromSourceResolutionEdges()
+    {
+        using var image = new Mat(2400, 1080, MatType.CV_8UC3, new Scalar(85, 85, 85));
+        var photo = new Rect(33, 693, 1008, 1014);
+        const int expectedRadius = 36;
+
+        using var mask = ImageExtractor.CreateRoundedMask(photo.Width, photo.Height, expectedRadius);
+        using (var photoRegion = new Mat(image, photo))
+            photoRegion.SetTo(new Scalar(125, 125, 125), mask);
+
+        var random = new Random(29);
+        for (var y = photo.Top + 80; y < photo.Bottom - 80; y += 20)
+        {
+            for (var x = photo.Left + 80; x < photo.Right - 80; x += 20)
+            {
+                var shade = (byte)random.Next(105, 150);
+                Cv2.Rectangle(image, new Rect(x, y, 7, 7), new Scalar(shade, shade, shade), -1);
+            }
+        }
+
+        var result = new ImageDetector().Detect(image);
+
+        Assert.NotNull(result.Best);
+        Assert.InRange(result.Best!.CornerRadius, expectedRadius - 5, expectedRadius + 5);
     }
 
     [Fact]
