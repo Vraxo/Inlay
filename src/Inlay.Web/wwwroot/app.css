@@ -1,8 +1,8 @@
 :root {
-    color-scheme: dark;
+    color-scheme: light;
     font-family: Inter, "Segoe UI", sans-serif;
-    background: #252329;
-    color: #f4f0eb;
+    background: #fafafa;
+    color: #262626;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
 }
@@ -13,7 +13,7 @@ body {
     margin: 0;
     min-width: 320px;
     min-height: 100vh;
-    background: #252329;
+    background: #fafafa;
 }
 button,
 input {
@@ -25,7 +25,7 @@ input {
     align-items: center;
     justify-content: center;
     gap: 14px;
-    color: #aaa5b1;
+    color: #737373;
 }
 #blazor-error-ui {
     display: none;
@@ -33,8 +33,8 @@ input {
     bottom: 0;
     width: 100%;
     padding: 12px 18px;
-    background: #493139;
-    color: #ffb4c8;
+    background: #fff0f3;
+    color: #c13584;
     text-align: center;
 }
 #blazor-error-ui .dismiss {
