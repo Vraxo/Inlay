@@ -126,9 +126,12 @@ public sealed class ImageDetector
 
         var second = ranked.Length > 1 ? ranked[1] : null;
         var margin = second is null ? 1.0 : best.Confidence - second.Confidence;
+        if (best.Confidence < DetectionResult.ReviewThreshold)
+            return new DetectionResult(DetectionStatus.Rejected, best, second,
+                "A possible foreground region was found, but its evidence is too weak for a reliable crop.");
         if (best.Confidence < DetectionResult.AutomaticThreshold || margin < 0.08)
             return new DetectionResult(DetectionStatus.Review, best, second,
-                "A foreground region was found. Check the suggested rectangle before downloading.");
+                "A foreground region was found, but its boundaries or separation are uncertain.");
 
         return new DetectionResult(DetectionStatus.Extracted, best, second,
             "Foreground boundaries and focus separation passed the initial heuristic thresholds.");
