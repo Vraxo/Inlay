@@ -58,6 +58,34 @@ Supported input formats: PNG, JPEG/JPG, and WebP. PNG is used for extracted outp
 
 The score is a ranking heuristic, not a probability. Thresholds must be calibrated on a labelled, held-out dataset before accuracy claims are made.
 
+### Local detector benchmark
+
+A local benchmark can measure detection against labelled screenshots without uploading any images:
+
+```powershell
+inlay benchmark .\benchmark\manifest.json
+```
+
+The manifest stores source-image paths relative to itself and the expected crop rectangle in source pixels. Set `expected` to `null` for screenshots that should not contain a foreground image:
+
+```json
+{
+  "minimumIou": 0.90,
+  "cases": [
+    {
+      "image": "screenshots/01.png",
+      "expected": { "x": 32, "y": 300, "width": 1016, "height": 1200 }
+    },
+    {
+      "image": "screenshots/02.png",
+      "expected": null
+    }
+  ]
+}
+```
+
+The command reports candidate recall, crop overlap (IoU), automatic-extraction success, and false positives. It writes `inlay-benchmark-results.json` beside the manifest. Positive cases pass only when the detector automatically extracts a crop that meets the IoU target; negative cases pass only when no candidate is returned. Each expected rectangle must be labelled once, after which the same private set can be rerun after every detector change.
+
 ## Output
 
 For a single file, the default output is `<name>.inlay.png` beside the source. For a directory, the default output directory is `inlay/` beneath the input directory. With `--recursive`, relative subdirectory structure is retained. Existing files are not replaced unless `--overwrite` is supplied.

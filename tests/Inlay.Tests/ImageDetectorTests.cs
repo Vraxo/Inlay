@@ -16,7 +16,7 @@ public sealed class ImageDetectorTests
 
         Assert.Equal(DetectionStatus.Rejected, result.Status);
         Assert.Null(result.Best);
-        Assert.Contains("0 contours examined", result.Reason);
+        Assert.Contains("0 edge contours", result.Reason);
     }
 
 
@@ -131,6 +131,46 @@ public sealed class ImageDetectorTests
         Assert.Equal(DetectionStatus.Review, result.Status);
         Assert.NotNull(result.Best);
         Assert.NotNull(result.Second);
+    }
+
+    [Fact]
+    public void FindsSharpForegroundOverBlurredBackgroundWithoutVisibleBorder()
+    {
+        const int imageSize = 900;
+        using var background = new Mat(imageSize, imageSize, MatType.CV_8UC3, new Scalar(90, 90, 90));
+        var random = new Random(113);
+
+        for (var y = 0; y < imageSize; y += 5)
+        {
+            for (var x = 0; x < imageSize; x += 5)
+            {
+                var shade = (byte)random.Next(55, 145);
+                Cv2.Rectangle(background, new Rect(x, y, 3, 3), new Scalar(shade, shade, shade), -1);
+            }
+        }
+
+        using var image = new Mat();
+        Cv2.GaussianBlur(background, image, new Size(41, 41), 12);
+        var foreground = new Rect(180, 190, 540, 520);
+        random = new Random(127);
+
+        for (var y = foreground.Top + 3; y < foreground.Bottom - 3; y += 7)
+        {
+            for (var x = foreground.Left + 3; x < foreground.Right - 3; x += 7)
+            {
+                var shade = (byte)random.Next(25, 230);
+                Cv2.Rectangle(image, new Rect(x, y, 4, 4), new Scalar(shade, shade, shade), -1);
+            }
+        }
+
+        var result = new ImageDetector().Detect(image);
+
+        Assert.NotNull(result.Best);
+        Assert.NotEqual(DetectionStatus.Rejected, result.Status);
+        Assert.InRange(result.Best!.Bounds.X, foreground.X - 35, foreground.X + 35);
+        Assert.InRange(result.Best.Bounds.Y, foreground.Y - 35, foreground.Y + 35);
+        Assert.InRange(result.Best.Bounds.Right, foreground.Right - 35, foreground.Right + 35);
+        Assert.InRange(result.Best.Bounds.Bottom, foreground.Bottom - 35, foreground.Bottom + 35);
     }
 
     private static void DrawTexturedForeground(Mat image, Rect bounds, int seed)

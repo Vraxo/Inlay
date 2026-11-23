@@ -187,7 +187,7 @@
             };
 
             editor.onPointerDown = event => {
-                if (event.button !== 0 || editor.drag)
+                if (event.button !== 0 || editor.drag || editor.spacePressed)
                     return;
 
                 const handle = event.target.closest("[data-handle]");
@@ -260,74 +260,180 @@
                 commit(editor);
             };
 
-            editor.magnifier = stage.querySelector(".crop-magnifier");
-            editor.onMagnifierMove = event => {
-                if (!editor.magnifier || !editor.image.complete || !editor.image.naturalWidth)
-                    return;
+            editor.viewport = stage.closest(".crop-viewport");
+            editor.zoomControls = Array.from(stage.closest(".panel").querySelectorAll("[data-zoom]"));
+            editor.zoomFactor = 1;
+            editor.panX = 0;
+            editor.panY = 0;
+            editor.spacePressed = false;
+            editor.pointerInside = false;
+            editor.panDrag = null;
+            editor.fitScale = 0;
 
-                const bounds = editor.image.getBoundingClientRect();
-                const stageBounds = editor.stage.getBoundingClientRect();
-                if (!bounds.width || !bounds.height)
-                    return;
+            editor.updateTransform = () => {
+                stage.style.transform = `translate3d(${editor.panX}px, ${editor.panY}px, 0) scale(${editor.zoomFactor})`;
+            };
 
-                const sourceX = clamp((event.clientX - bounds.left) / bounds.width * editor.sourceWidth, 0, editor.sourceWidth - 1);
-                const sourceY = clamp((event.clientY - bounds.top) / bounds.height * editor.sourceHeight, 0, editor.sourceHeight - 1);
-                const lens = editor.magnifier;
-                const context = lens.getContext("2d");
-                const zoom = 9;
-                const sampleSize = lens.width / zoom;
-                const sampleX = clamp(sourceX - sampleSize / 2, 0, Math.max(0, editor.sourceWidth - sampleSize));
-                const sampleY = clamp(sourceY - sampleSize / 2, 0, Math.max(0, editor.sourceHeight - sampleSize));
-
-                context.clearRect(0, 0, lens.width, lens.height);
-                context.imageSmoothingEnabled = false;
-                context.drawImage(editor.image, sampleX, sampleY, sampleSize, sampleSize, 0, 0, lens.width, lens.height);
-
-                context.save();
-                context.strokeStyle = "rgba(255,255,255,.22)";
-                context.lineWidth = 1;
-                for (let offset = 0; offset <= lens.width; offset += zoom) {
-                    context.beginPath();
-                    context.moveTo(offset + .5, 0);
-                    context.lineTo(offset + .5, lens.height);
-                    context.moveTo(0, offset + .5);
-                    context.lineTo(lens.width, offset + .5);
-                    context.stroke();
+            editor.updateZoomButtons = () => {
+                for (const button of editor.zoomControls) {
+                    const mode = button.dataset.zoom;
+                    const selected = mode === "fit"
+                        ? Math.abs(editor.zoomFactor - 1) < 0.01
+                        : Math.abs(editor.zoomFactor - Number(mode) / editor.fitScale) < 0.03;
+                    button.setAttribute("aria-pressed", String(selected));
                 }
-                context.strokeStyle = "#f77737";
-                context.lineWidth = 2;
-                context.beginPath();
-                context.moveTo(lens.width / 2, 0);
-                context.lineTo(lens.width / 2, lens.height);
-                context.moveTo(0, lens.height / 2);
-                context.lineTo(lens.width, lens.height / 2);
-                context.stroke();
-                context.restore();
+            };
 
-                const lensSize = 204;
-                const localX = event.clientX - stageBounds.left;
-                const localY = event.clientY - stageBounds.top;
-                lens.style.left = `${clamp(localX + 18, 0, Math.max(0, stageBounds.width - lensSize))}px`;
-                lens.style.top = `${clamp(localY + 18, 0, Math.max(0, stageBounds.height - lensSize))}px`;
-                lens.classList.add("visible");
+            editor.resetZoom = () => {
+                if (!editor.image.clientWidth || !editor.sourceWidth)
+                    return;
+                editor.fitScale = editor.image.clientWidth / editor.sourceWidth;
+                editor.zoomFactor = 1;
+                editor.panX = 0;
+                editor.panY = 0;
+                editor.updateTransform();
+                editor.updateZoomButtons();
             };
-            editor.onMagnifierLeave = () => {
-                if (!editor.drag)
-                    editor.magnifier?.classList.remove("visible");
+
+            editor.zoomAt = (nextZoom, clientX, clientY) => {
+                if (!editor.fitScale || !editor.viewport)
+                    return;
+                const viewportBounds = editor.viewport.getBoundingClientRect();
+                const oldZoom = editor.zoomFactor;
+                const maximumZoom = 8 / editor.fitScale;
+                nextZoom = clamp(nextZoom, 1, maximumZoom);
+                const centerX = viewportBounds.left + viewportBounds.width / 2;
+                const centerY = viewportBounds.top + viewportBounds.height / 2;
+                const localX = (clientX - centerX - editor.panX) / oldZoom;
+                const localY = (clientY - centerY - editor.panY) / oldZoom;
+                editor.panX = clientX - centerX - localX * nextZoom;
+                editor.panY = clientY - centerY - localY * nextZoom;
+                editor.zoomFactor = nextZoom;
+                editor.updateTransform();
+                editor.updateZoomButtons();
             };
+
+            editor.setZoom = mode => {
+                if (!editor.fitScale)
+                    return;
+                const viewportBounds = editor.viewport.getBoundingClientRect();
+                if (mode === "fit") {
+                    editor.resetZoom();
+                    return;
+                }
+                const target = Number(mode);
+                if (!Number.isFinite(target) || target <= 0)
+                    return;
+                editor.zoomAt(target / editor.fitScale,
+                    viewportBounds.left + viewportBounds.width / 2,
+                    viewportBounds.top + viewportBounds.height / 2);
+            };
+
+            editor.onWheel = event => {
+                event.preventDefault();
+                editor.pointerInside = true;
+                const multiplier = event.deltaY < 0 ? 1.2 : 1 / 1.2;
+                editor.zoomAt(editor.zoomFactor * multiplier, event.clientX, event.clientY);
+            };
+
+            editor.onViewportPointerDown = event => {
+                const shouldPan = editor.spacePressed && event.button === 0 || event.button === 1;
+                if (!shouldPan || editor.panDrag)
+                    return;
+                event.preventDefault();
+                event.stopPropagation();
+                editor.panDrag = {
+                    pointerId: event.pointerId,
+                    startX: event.clientX,
+                    startY: event.clientY,
+                    panX: editor.panX,
+                    panY: editor.panY
+                };
+                editor.viewport.classList.add("is-panning");
+                editor.viewport.setPointerCapture(event.pointerId);
+            };
+
+            editor.onViewportPointerMove = event => {
+                editor.pointerInside = true;
+                if (!editor.panDrag || editor.panDrag.pointerId !== event.pointerId)
+                    return;
+                editor.panX = editor.panDrag.panX + event.clientX - editor.panDrag.startX;
+                editor.panY = editor.panDrag.panY + event.clientY - editor.panDrag.startY;
+                editor.updateTransform();
+            };
+
+            editor.onViewportPointerUp = event => {
+                if (!editor.panDrag || editor.panDrag.pointerId !== event.pointerId)
+                    return;
+                editor.panDrag = null;
+                editor.viewport.classList.remove("is-panning");
+                if (editor.viewport.hasPointerCapture(event.pointerId))
+                    editor.viewport.releasePointerCapture(event.pointerId);
+            };
+
+            editor.onViewportEnter = () => {
+                editor.pointerInside = true;
+                if (editor.spacePressed)
+                    editor.viewport.classList.add("pan-ready");
+            };
+            editor.onViewportLeave = () => {
+                editor.pointerInside = false;
+                editor.viewport.classList.remove("pan-ready");
+            };
+
+            editor.onSpaceDown = event => {
+                if (event.code !== "Space" || event.target instanceof HTMLElement &&
+                    (event.target.isContentEditable || event.target.closest("button, a, input, textarea, select")))
+                    return;
+                editor.spacePressed = true;
+                if (editor.pointerInside) {
+                    event.preventDefault();
+                    editor.viewport.classList.add("pan-ready");
+                }
+            };
+            editor.onSpaceUp = event => {
+                if (event.code !== "Space")
+                    return;
+                editor.spacePressed = false;
+                editor.viewport.classList.remove("pan-ready");
+            };
+            editor.onWindowBlur = () => {
+                editor.spacePressed = false;
+                editor.panDrag = null;
+                editor.viewport.classList.remove("pan-ready", "is-panning");
+            };
+            editor.onWindowResize = () => {
+                const sourceZoom = editor.zoomFactor * editor.fitScale;
+                editor.resetZoom();
+                if (sourceZoom > 1.01)
+                    editor.setZoom(String(Math.min(8, sourceZoom)));
+            };
+            editor.onImageLoad = () => {
+                drawPreview(editor);
+                editor.resetZoom();
+            };
+
+            editor.viewport.addEventListener("wheel", editor.onWheel, { passive: false });
+            editor.viewport.addEventListener("pointerdown", editor.onViewportPointerDown);
+            editor.viewport.addEventListener("pointermove", editor.onViewportPointerMove);
+            editor.viewport.addEventListener("pointerup", editor.onViewportPointerUp);
+            editor.viewport.addEventListener("pointercancel", editor.onViewportPointerUp);
+            editor.viewport.addEventListener("pointerenter", editor.onViewportEnter);
+            editor.viewport.addEventListener("pointerleave", editor.onViewportLeave);
+            editor.zoomControls.forEach(button => button.addEventListener("click", () => editor.setZoom(button.dataset.zoom)));
+            window.addEventListener("keydown", editor.onSpaceDown);
+            window.addEventListener("keyup", editor.onSpaceUp);
+            window.addEventListener("blur", editor.onWindowBlur);
+            window.addEventListener("resize", editor.onWindowResize);
             editor.onRadiusInput = () => {
                 setCrop(editor, editor.x, editor.y, editor.width, editor.height, Number(editor.radiusControl.value));
             };
             editor.onRadiusChange = () => commit(editor);
-            editor.onImageLoad = () => drawPreview(editor);
-
             editor.selection.addEventListener("pointerdown", editor.onPointerDown);
             editor.selection.addEventListener("pointermove", editor.onPointerMove);
             editor.selection.addEventListener("pointerup", editor.onPointerUp);
             editor.selection.addEventListener("pointercancel", editor.onPointerUp);
             editor.selection.addEventListener("keydown", editor.onKeyDown);
-            editor.stage.addEventListener("pointermove", editor.onMagnifierMove);
-            editor.stage.addEventListener("pointerleave", editor.onMagnifierLeave);
             editor.radiusControl.addEventListener("input", editor.onRadiusInput);
             editor.radiusControl.addEventListener("change", editor.onRadiusChange);
             editor.image.addEventListener("load", editor.onImageLoad);
@@ -335,7 +441,9 @@
             editors.set(stage, editor);
         }
 
+        const sourceChanged = editor.sourceUrl !== image.src;
         editor.image = image;
+        editor.sourceUrl = image.src;
         editor.selection = selection;
         editor.canvas = canvas;
         editor.readout = readout;
@@ -344,9 +452,17 @@
         editor.dotnet = dotnet;
         editor.sourceWidth = sourceWidth;
         editor.sourceHeight = sourceHeight;
+        editor.viewport = stage.closest(".crop-viewport");
 
         setCrop(editor, x, y, width, height, radius);
+        if (image.complete && image.naturalWidth && (sourceChanged || !editor.fitScale))
+            editor.resetZoom();
     }
 
-    window.inlayCropEditor = { initialize };
+    function setZoom(stage, mode) {
+        const editor = editors.get(stage);
+        editor?.setZoom(mode);
+    }
+
+    window.inlayCropEditor = { initialize, setZoom };
 })();
