@@ -1,7 +1,6 @@
 <Solution>
   <Project Path="src/Inlay.Core/Inlay.Core.csproj" />
   <Project Path="src/Inlay.Cli/Inlay.Cli.csproj" />
-  <Project Path="src/Inlay.Web/Inlay.Web.csproj" />
   <Project Path="tests/Inlay.Tests/Inlay.Tests.csproj" />
   <Project Path="tests/Inlay.Cli.Tests/Inlay.Cli.Tests.csproj" />
 </Solution>
