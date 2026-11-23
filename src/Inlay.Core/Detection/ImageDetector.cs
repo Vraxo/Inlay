@@ -38,7 +38,7 @@ public sealed class ImageDetector
         FocusRegionDetector.CreateFocusMap(gray, focusMap);
 
         Cv2.FindContours(closed, out Point[][] contours, out _, RetrievalModes.List, ContourApproximationModes.ApproxSimple);
-        var candidates = new List<DetectionCandidate>();
+        var candidates = new List<RankedCandidate>();
         var rejectedByBounds = 0;
         var rejectedByAspectRatio = 0;
         var rejectedByAreaRatio = 0;
@@ -64,16 +64,16 @@ public sealed class ImageDetector
                 ? 1.0
                 : Math.Clamp(1.0 - Math.Abs(polygon.Length - 4) / 18.0, 0.35, 0.9);
 
-            AddCandidate(candidates, edges, gray, focusMap, bounds, geometry, scale,
+            AddCandidate(candidates, edges, gray, focusMap, bounds, geometry, false, scale,
                 analysis.Width, analysis.Height, ref rejectedByAreaRatio);
         }
 
         var focusCandidates = FocusRegionDetector.FindCandidates(focusMap);
         foreach (var bounds in focusCandidates)
-            AddCandidate(candidates, edges, gray, focusMap, bounds, 0, scale,
+            AddCandidate(candidates, edges, gray, focusMap, bounds, 0, true, scale,
                 analysis.Width, analysis.Height, ref rejectedByAreaRatio);
 
-        var ranked = candidates.OrderByDescending(candidate => candidate.Confidence).ToArray();
+        var ranked = candidates.OrderByDescending(candidate => candidate.Result.Confidence).ToArray();
         if (ranked.Length == 0)
         {
             var reason = $"No candidate survived filtering. {contours.Length} edge contours and " +
@@ -82,7 +82,8 @@ public sealed class ImageDetector
             return new DetectionResult(DetectionStatus.Rejected, null, null, reason);
         }
 
-        var best = ranked[0];
+        var bestMatch = ranked[0];
+        var best = bestMatch.Result;
         var analysisBounds = DetectionGeometry.ScaleRect(best.Bounds, scale);
         var refinedAnalysisBounds = CropRefiner.RefineHorizontalBounds(edges, analysisBounds);
         var refinedBounds = DetectionGeometry.ScaleRect(refinedAnalysisBounds, 1.0 / scale);
@@ -108,7 +109,7 @@ public sealed class ImageDetector
         var finalGeometry = CandidateScorer.MeasureRectangleGeometry(edges, refinedAnalysisBounds);
         var finalSharpness = CandidateScorer.MeasureSharpnessContrast(focusMap, refinedAnalysisBounds);
         var finalConfidence = ScoreCandidate(
-            finalBoundary, finalEdgeStrength, finalGeometry, finalSharpness, finalCornerFit);
+            finalBoundary, finalEdgeStrength, finalGeometry, finalSharpness, finalCornerFit, bestMatch.FromFocusMap);
 
         best = best with
         {
@@ -124,7 +125,7 @@ public sealed class ImageDetector
                         (analysis.Width * analysis.Height)
         };
 
-        var second = ranked.Length > 1 ? ranked[1] : null;
+        var second = ranked.Length > 1 ? ranked[1].Result : null;
         var margin = second is null ? 1.0 : best.Confidence - second.Confidence;
         if (best.Confidence < DetectionResult.ReviewThreshold && (second is null || margin >= 0.08))
             return new DetectionResult(DetectionStatus.Rejected, best, second,
@@ -138,12 +139,13 @@ public sealed class ImageDetector
     }
 
     private static void AddCandidate(
-        List<DetectionCandidate> candidates,
+        List<RankedCandidate> candidates,
         Mat edges,
         Mat gray,
         Mat focusMap,
         Rect bounds,
         double geometryHint,
+        bool fromFocusMap,
         double scale,
         int imageWidth,
         int imageHeight,
@@ -161,16 +163,17 @@ public sealed class ImageDetector
         var sharpness = CandidateScorer.MeasureSharpnessContrast(focusMap, bounds);
         var geometry = Math.Max(geometryHint, CandidateScorer.MeasureRectangleGeometry(edges, bounds));
         const double cornerFit = 0.65;
-        var confidence = ScoreCandidate(boundary, edgeStrength, geometry, sharpness, cornerFit);
-        var candidate = new DetectionCandidate(
+        var confidence = ScoreCandidate(boundary, edgeStrength, geometry, sharpness, cornerFit, fromFocusMap);
+        var detectionCandidate = new DetectionCandidate(
             DetectionGeometry.ScaleRect(bounds, 1.0 / scale), confidence, boundary, edgeStrength,
             geometry, sharpness, cornerFit, 0, areaRatio);
+        var candidate = new RankedCandidate(detectionCandidate, fromFocusMap);
 
         var duplicateIndex = candidates.FindIndex(existing =>
-            DetectionGeometry.IntersectionOverUnion(existing.Bounds, candidate.Bounds) >= 0.82);
+            DetectionGeometry.IntersectionOverUnion(existing.Result.Bounds, detectionCandidate.Bounds) >= 0.82);
         if (duplicateIndex < 0)
             candidates.Add(candidate);
-        else if (candidate.Confidence > candidates[duplicateIndex].Confidence)
+        else if (detectionCandidate.Confidence > candidates[duplicateIndex].Result.Confidence)
             candidates[duplicateIndex] = candidate;
     }
 
@@ -183,10 +186,22 @@ public sealed class ImageDetector
         double edgeStrength,
         double geometry,
         double sharpness,
-        double cornerFit) =>
-        boundary * 0.10 +
-        edgeStrength * 0.20 +
-        geometry * 0.10 +
-        sharpness * 0.55 +
-        cornerFit * 0.05;
+        double cornerFit,
+        bool fromFocusMap)
+    {
+        if (fromFocusMap)
+            return boundary * 0.10 +
+                   edgeStrength * 0.20 +
+                   geometry * 0.10 +
+                   sharpness * 0.55 +
+                   cornerFit * 0.05;
+
+        return boundary * 0.30 +
+               edgeStrength * 0.12 +
+               geometry * 0.20 +
+               sharpness * 0.33 +
+               cornerFit * 0.05;
+    }
+
+    private sealed record RankedCandidate(DetectionCandidate Result, bool FromFocusMap);
 }
