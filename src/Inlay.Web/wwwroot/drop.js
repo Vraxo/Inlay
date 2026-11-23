@@ -27,13 +27,15 @@
         event.preventDefault();
         dropzone.classList.remove("dragging");
 
-        const file = event.dataTransfer?.files?.[0];
+        const files = event.dataTransfer?.files;
         const input = dropzone.querySelector('input[type="file"]');
-        if (!file || !input)
+        if (!files?.length || !input)
             return;
 
         const transfer = new DataTransfer();
-        transfer.items.add(file);
+        for (const file of files)
+            transfer.items.add(file);
+
         input.files = transfer.files;
         input.dispatchEvent(new Event("change", { bubbles: true }));
     });
