@@ -121,7 +121,7 @@ public sealed class ImageDetector
         Cv2.Canny(sourceBlurred, sourceStrongEdges, 55, 145);
         Cv2.Canny(sourceBlurred, sourceSoftEdges, 25, 75);
         Cv2.BitwiseOr(sourceStrongEdges, sourceSoftEdges, sourceEdges);
-        finalBounds = RefineVerticalBounds(sourceEdges, finalBounds, 4);
+        finalBounds = RefineVerticalBounds(sourceEdges, finalBounds, 2);
 
         // Confidence must describe the final source-resolution rectangle.
         // Boundary support is measured with a small pixel tolerance so a
@@ -152,16 +152,12 @@ public sealed class ImageDetector
         var second = ranked.Length > 1 ? ranked[1] : null;
         var margin = second is null ? 1.0 : best.Confidence - second.Confidence;
 
-        if (best.Confidence < DetectionResult.ReviewThreshold)
-            return new DetectionResult(DetectionStatus.Rejected, best, second,
-                $"Best candidate scored {best.Confidence:P0}, below the review threshold of {DetectionResult.ReviewThreshold:P0}.");
-
         if (best.Confidence < DetectionResult.AutomaticThreshold || margin < 0.08)
-            return new DetectionResult(DetectionStatus.Review, best, second, margin < 0.08
-                ? $"Top candidates are too close ({best.Confidence:P0} and {second!.Confidence:P0})."
-                : $"Best candidate scored {best.Confidence:P0}; automatic extraction requires {DetectionResult.AutomaticThreshold:P0}.");
+            return new DetectionResult(DetectionStatus.Review, best, second,
+                "A crop candidate was found. Check the suggested rectangle before downloading.");
 
-        return new DetectionResult(DetectionStatus.Extracted, best, second, "Candidate passed the initial heuristic thresholds.");
+        return new DetectionResult(DetectionStatus.Extracted, best, second,
+            "Candidate passed the initial heuristic thresholds.");
     }
 
 
@@ -315,8 +311,9 @@ public sealed class ImageDetector
 
         // Require a meaningful local improvement to avoid snapping to text or
         // unrelated image detail near a soft outer edge.
-        return candidate.Strength - candidate.OriginalStrength >= 0.015 &&
-               candidate.Strength >= candidate.OriginalStrength * 1.2;
+        return candidate.Strength - candidate.OriginalStrength >= 0.04 &&
+               candidate.Strength >= candidate.OriginalStrength * 1.5 &&
+               candidate.Strength >= 0.05;
     }
 
     private static double MeasureRectangleGeometry(Mat edges, Rect rect, int tolerance)
