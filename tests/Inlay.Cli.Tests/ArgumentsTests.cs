@@ -23,6 +23,14 @@ public sealed class ArgumentsTests
     }
 
     [Fact]
+    public void ParsesLocalBenchmarkCommand()
+    {
+        var result = Arguments.CreateCommand().Parse(["benchmark", "benchmark/manifest.json"]);
+
+        Assert.Empty(result.Errors);
+    }
+
+    [Fact]
     public void RejectsUnknownOptions()
     {
         var result = Arguments.CreateCommand().Parse(["photo.jpg", "--unknown"]);
