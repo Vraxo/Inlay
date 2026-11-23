@@ -738,3 +738,14 @@ footer {
         flex-direction: column;
     }
 }
+
+
+.header-actions { display:flex; align-items:center; gap:22px; }
+.theme-control { display:inline-flex; align-items:center; gap:8px; color:#737373; font-size:11px; }
+.theme-select { border:1px solid #dbdbdb; border-radius:7px; padding:7px 26px 7px 9px; background:#fff; color:#262626; font:inherit; cursor:pointer; }
+@media (max-width:520px) {
+  .header-actions { gap:10px; }
+  .local-note { font-size:0; }
+  .local-note span { width:7px; height:7px; }
+  .theme-control { gap:5px; }
+}
