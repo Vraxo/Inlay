@@ -537,4 +537,45 @@ public sealed class ImageDetectorTests
             $"sharpness {best.SharpnessContrast:F3}, area {best.AreaRatio:F3}). " +
             $"Second: {result.Second?.Bounds}, confidence {result.Second?.Confidence:F3}.");
     }
+
+    [Fact]
+    public void RefinesTopAndBottomEdgesBeyondThePreviousSearchRange()
+    {
+        const int imageWidth = 1080;
+        const int imageHeight = 2400;
+        var foreground = new Rect(33, 730, 1014, 940);
+
+        using var backdrop = new Mat(imageHeight, imageWidth, MatType.CV_8UC3);
+        Cv2.Randu(backdrop, new Scalar(0, 0, 0), new Scalar(90, 90, 90));
+        using var image = new Mat();
+        Cv2.GaussianBlur(backdrop, image, new Size(61, 61), 18);
+
+        var random = new Random(181);
+        using (var photo = new Mat(image, foreground))
+        {
+            for (var y = 0; y < foreground.Height; y += 12)
+            {
+                for (var x = 0; x < foreground.Width; x += 12)
+                {
+                    var shade = random.Next(35, 235);
+                    Cv2.Rectangle(photo, new Rect(x, y, 8, 8),
+                        new Scalar(shade, random.Next(35, 235), random.Next(35, 235)), -1);
+                }
+            }
+
+            Cv2.Line(photo, new Point(0, 0), new Point(foreground.Width - 1, 0),
+                new Scalar(245, 245, 245), 3);
+            Cv2.Line(photo, new Point(0, foreground.Height - 1),
+                new Point(foreground.Width - 1, foreground.Height - 1), new Scalar(245, 245, 245), 3);
+        }
+
+        var result = new ImageDetector().Detect(image);
+
+        Assert.NotNull(result.Best);
+        Assert.InRange(result.Best!.Bounds.X, foreground.X - 20, foreground.X + 20);
+        Assert.InRange(result.Best.Bounds.Right, foreground.Right - 20, foreground.Right + 20);
+        Assert.InRange(result.Best.Bounds.Y, foreground.Y - 20, foreground.Y + 20);
+        Assert.InRange(result.Best.Bounds.Bottom, foreground.Bottom - 20, foreground.Bottom + 20);
+    }
+
 }
