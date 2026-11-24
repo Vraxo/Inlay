@@ -5,6 +5,8 @@ namespace Inlay.Detection;
 internal static class CenteredRectangleDetector
 {
     private const int MaximumSearchDimension = 160;
+    private const int MaximumCandidates = 40;
+    private const int MaximumCandidatesPerAreaBand = 5;
 
     internal static IReadOnlyList<Rect> FindCandidates(Mat focusMap, Mat edges)
     {
@@ -26,7 +28,7 @@ internal static class CenteredRectangleDetector
             edges.CopyTo(edgeMap);
         }
 
-        var candidates = new List<(Rect Bounds, double Score)>();
+        var candidates = new List<(Rect Bounds, double Score, double AreaRatio)>();
         var widthRatios = Enumerable.Range(6, 14).Select(value => value * 0.05);
         var heightRatios = Enumerable.Range(5, 15).Select(value => value * 0.05);
         var offsets = new[] { -0.10, -0.05, 0.0, 0.05, 0.10 };
@@ -59,30 +61,57 @@ internal static class CenteredRectangleDetector
                             continue;
 
                         var sharpness = CandidateScorer.MeasureSharpnessContrast(focus, bounds);
-                        if (sharpness < 0.56)
+                        var boundary = MeasureBoundary(edgeMap, bounds);
+
+                        // Large candidates can contain smooth but still in-focus
+                        // parts of a photograph. Do not discard them solely because
+                        // a smaller subject has much higher local sharpness.
+                        if (sharpness < 0.56 && (areaRatio < 0.25 || boundary < 0.015))
                             continue;
 
-                        var boundary = MeasureBoundary(edgeMap, bounds);
                         var center = MeasureCenterPreference(bounds, focus.Width, focus.Height);
                         var score = sharpness * 0.72 + boundary * 0.18 + center * 0.10;
-                        candidates.Add((bounds, score));
+                        candidates.Add((bounds, score, areaRatio));
                     }
                 }
             }
         }
 
         var results = new List<Rect>();
+        foreach (var areaBand in candidates
+                     .GroupBy(candidate => GetAreaBand(candidate.AreaRatio))
+                     .OrderBy(group => group.Key))
+        {
+            foreach (var candidate in areaBand.OrderByDescending(item => item.Score).Take(MaximumCandidatesPerAreaBand))
+                AddDistinctResult(results, candidate.Bounds, scale);
+        }
+
         foreach (var candidate in candidates.OrderByDescending(item => item.Score))
         {
-            var originalBounds = DetectionGeometry.ScaleRect(candidate.Bounds, 1.0 / scale);
-            if (results.All(existing => DetectionGeometry.IntersectionOverUnion(existing, originalBounds) < 0.78))
-                results.Add(originalBounds);
-
-            if (results.Count == 20)
+            if (results.Count >= MaximumCandidates)
                 break;
+
+            AddDistinctResult(results, candidate.Bounds, scale);
         }
 
         return results;
+    }
+
+    private static int GetAreaBand(double areaRatio) => areaRatio switch
+    {
+        < 0.10 => 0,
+        < 0.20 => 1,
+        < 0.35 => 2,
+        < 0.55 => 3,
+        _ => 4
+    };
+
+    private static void AddDistinctResult(List<Rect> results, Rect bounds, double scale)
+    {
+        var originalBounds = DetectionGeometry.ScaleRect(bounds, 1.0 / scale);
+        if (results.Count < MaximumCandidates &&
+            results.All(existing => DetectionGeometry.IntersectionOverUnion(existing, originalBounds) < 0.78))
+            results.Add(originalBounds);
     }
 
     private static double MeasureBoundary(Mat edges, Rect bounds)
