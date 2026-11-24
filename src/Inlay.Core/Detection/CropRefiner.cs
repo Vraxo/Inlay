@@ -154,7 +154,29 @@ internal static class CropRefiner
         if (bestTransition < 0.12 || bestDifference < 2.0)
             return RefineTopBoundaryNearOriginal(edges, bounds, searchRadius, lineX, lineWidth);
 
-        var refinedY = bestEdgeRow + 1;
+        // The Laplacian focus map is blurred to suppress texture noise, so
+        // its strongest transition can begin slightly before the true edge.
+        // Snap to a continuous edge in that neighborhood when one is present.
+        var edgeRadius = bandHeight + 12;
+        var firstBoundaryRow = Math.Max(0, bestEdgeRow - edgeRadius);
+        var lastBoundaryRow = Math.Min(edges.Height - 1, bestEdgeRow + edgeRadius);
+        var bestBoundaryRow = bestEdgeRow;
+        var bestBoundaryStrength = 0.0;
+
+        for (var row = firstBoundaryRow; row <= lastBoundaryRow; row++)
+        {
+            var strength = DetectionGeometry.CountEdges(edges, new Rect(lineX, row, lineWidth, 1)) /
+                           (double)lineWidth;
+            if (strength <= bestBoundaryStrength)
+                continue;
+
+            bestBoundaryRow = row;
+            bestBoundaryStrength = strength;
+        }
+
+        var refinedY = bestBoundaryStrength >= 0.05
+            ? bestBoundaryRow + 1
+            : bestEdgeRow + 1;
         var refinedHeight = bounds.Bottom - refinedY;
         return refinedY != bounds.Y && refinedHeight > 0
             ? new Rect(bounds.X, refinedY, bounds.Width, refinedHeight)
