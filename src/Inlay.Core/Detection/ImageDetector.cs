@@ -88,7 +88,20 @@ public sealed class ImageDetector
             return new DetectionResult(DetectionStatus.Rejected, null, null, reason);
         }
 
-        var bestMatch = ranked[0];
+        var highestConfidence = ranked[0].Result.Confidence;
+        var largerAlternative = ranked
+            .Where(candidate =>
+                candidate.Result.AreaRatio >= ranked[0].Result.AreaRatio * 2.0 &&
+                highestConfidence - candidate.Result.Confidence < 0.08 &&
+                CandidateScorer.MeasureCenterPreference(
+                    candidate.Result.Bounds, analysis.Width, analysis.Height) >= 0.75)
+            .OrderByDescending(candidate => candidate.Result.AreaRatio)
+            .FirstOrDefault();
+
+        // When two centered candidates are nearly tied, prefer the more complete
+        // rectangle. This prevents a detailed subject inside a larger image from
+        // winning solely because its local sharpness is higher.
+        var bestMatch = largerAlternative ?? ranked[0];
         var best = bestMatch.Result;
         var analysisBounds = DetectionGeometry.ScaleRect(best.Bounds, scale);
         var hasUsableBoundaries = best.BoundaryContinuity >= 0.12;
@@ -151,7 +164,8 @@ public sealed class ImageDetector
                         (analysis.Width * analysis.Height)
         };
 
-        var second = ranked.Length > 1 ? ranked[1].Result : null;
+        var secondMatch = ranked.FirstOrDefault(candidate => !ReferenceEquals(candidate, bestMatch));
+        var second = secondMatch?.Result;
         var margin = second is null ? 1.0 : bestMatch.Result.Confidence - second.Confidence;
         if (best.Confidence < DetectionResult.ReviewThreshold && (second is null || margin >= 0.08))
             return new DetectionResult(DetectionStatus.Rejected, best, second,
