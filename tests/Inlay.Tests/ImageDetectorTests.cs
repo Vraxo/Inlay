@@ -219,9 +219,9 @@ public sealed class ImageDetectorTests
 
         Assert.NotNull(result.Best);
         Assert.NotEqual(DetectionStatus.Rejected, result.Status);
-        Assert.InRange(result.Best!.Bounds.X, foreground.X - 12, foreground.X + 12);
+        Assert.InRange(result.Best!.Bounds.X, foreground.X - 2, foreground.X + 2);
         Assert.InRange(result.Best.Bounds.Y, foreground.Y - 12, foreground.Y + 12);
-        Assert.InRange(result.Best.Bounds.Right, foreground.Right - 12, foreground.Right + 12);
+        Assert.InRange(result.Best.Bounds.Right, foreground.Right - 2, foreground.Right + 2);
         Assert.InRange(result.Best.Bounds.Bottom, foreground.Bottom - 12, foreground.Bottom + 12);
     }
 
