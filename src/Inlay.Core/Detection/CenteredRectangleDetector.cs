@@ -5,7 +5,7 @@ namespace Inlay.Detection;
 internal static class CenteredRectangleDetector
 {
     private const int MaximumSearchDimension = 160;
-    private const int MaximumCandidates = 40;
+    private const int MaximumCandidates = 60;
     private const int MaximumCandidatesPerAreaBand = 5;
 
     internal static IReadOnlyList<Rect> FindCandidates(Mat focusMap, Mat edges)
@@ -28,7 +28,10 @@ internal static class CenteredRectangleDetector
             edges.CopyTo(edgeMap);
         }
 
-        var candidates = new List<(Rect Bounds, double Score, double AreaRatio)>();
+        if (Cv2.CountNonZero(edgeMap) == 0)
+            return Array.Empty<Rect>();
+
+        var candidates = new List<(Rect Bounds, double Score, double AreaRatio, double WidthRatio, double HeightRatio)>();
         var widthRatios = Enumerable.Range(6, 14).Select(value => value * 0.05);
         var heightRatios = Enumerable.Range(5, 15).Select(value => value * 0.05);
         var offsets = new[] { -0.10, -0.05, 0.0, 0.05, 0.10 };
@@ -71,13 +74,21 @@ internal static class CenteredRectangleDetector
 
                         var center = MeasureCenterPreference(bounds, focus.Width, focus.Height);
                         var score = sharpness * 0.72 + boundary * 0.18 + center * 0.10;
-                        candidates.Add((bounds, score, areaRatio));
+                        candidates.Add((bounds, score, areaRatio, widthRatio, heightRatio));
                     }
                 }
             }
         }
 
         var results = new List<Rect>();
+        foreach (var heightBand in candidates
+                     .Where(candidate => candidate.WidthRatio >= 0.80)
+                     .GroupBy(candidate => candidate.HeightRatio))
+        {
+            foreach (var candidate in heightBand.OrderByDescending(item => item.Score).Take(2))
+                AddDistinctResult(results, candidate.Bounds, scale);
+        }
+
         foreach (var areaBand in candidates
                      .GroupBy(candidate => GetAreaBand(candidate.AreaRatio))
                      .OrderBy(group => group.Key))
