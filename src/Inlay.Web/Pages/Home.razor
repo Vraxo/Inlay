@@ -131,7 +131,6 @@
                             <div class="crop-stage" @ref="cropStage">
                                 <img @ref="sourceImageElement" src="@activeImage.SourcePreview" alt="Original screenshot with draggable crop selection" draggable="false" />
                                 <canvas @ref="cropPreviewCanvas" class="crop-preview-canvas" aria-label="Cropped result preview"></canvas>
-                                <div class="pixel-grid" aria-hidden="true"></div>
                                 <div class="crop-selection" @ref="cropSelection" role="group" aria-label="Crop selection. Drag to move; use the handles to resize." tabindex="0">
                                     <button type="button" class="crop-handle handle-n" data-handle="n" aria-label="Resize from top edge"></button>
                                     <button type="button" class="crop-handle handle-e" data-handle="e" aria-label="Resize from right edge"></button>
@@ -143,6 +142,7 @@
                                     <button type="button" class="crop-handle handle-se" data-handle="se" aria-label="Resize from bottom-right corner"></button>
                                 </div>
                             </div>
+                            <canvas class="pixel-grid-overlay" aria-hidden="true"></canvas>
                         </div>
                         <div class="crop-zoom-toolbar" role="group" aria-label="Canvas zoom">
                             <span>Scroll to zoom · Space + drag to pan</span>
