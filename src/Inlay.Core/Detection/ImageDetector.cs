@@ -110,8 +110,8 @@ public sealed class ImageDetector
         var finalCornerRadius = 0;
         if (hasUsableBoundaries)
         {
-            finalBounds = CropRefiner.RefineTopBoundary(sourceEdges, finalBounds, 4);
-            finalBounds = CropRefiner.RefineBottomBoundary(sourceEdges, finalBounds, 6);
+            finalBounds = CropRefiner.RefineTopBoundary(sourceEdges, finalBounds, 24);
+            finalBounds = CropRefiner.RefineBottomBoundary(sourceEdges, finalBounds, 24);
             finalCornerRadius = CornerRadiusEstimator.EstimateCornerRadius(sourceEdges, finalBounds);
         }
 

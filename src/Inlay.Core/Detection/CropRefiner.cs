@@ -131,8 +131,9 @@ internal static class CropRefiner
         // it marks the first foreground row. If it lies at/above that top,
         // it marks the final background row and the crop starts one row later.
         var refinedY = bestEdgeRow > bounds.Y ? bestEdgeRow : bestEdgeRow + 1;
-        return bestStrength >= 0.05 && refinedY != bounds.Y
-            ? new Rect(bounds.X, refinedY, bounds.Width, bounds.Height)
+        var refinedHeight = bounds.Bottom - refinedY;
+        return bestStrength >= 0.05 && refinedY != bounds.Y && refinedHeight > 0
+            ? new Rect(bounds.X, refinedY, bounds.Width, refinedHeight)
             : bounds;
     }
 

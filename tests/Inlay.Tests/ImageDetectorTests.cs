@@ -209,6 +209,23 @@ public sealed class ImageDetectorTests
     }
 
     [Fact]
+    public void FindsWideForegroundAtPhoneResolution()
+    {
+        using var image = new Mat(2400, 1080, MatType.CV_8UC3, new Scalar(85, 85, 85));
+        var foreground = new Rect(32, 857, 1016, 683);
+        DrawTexturedForeground(image, foreground, 83);
+
+        var result = new ImageDetector().Detect(image);
+
+        Assert.NotNull(result.Best);
+        Assert.NotEqual(DetectionStatus.Rejected, result.Status);
+        Assert.InRange(result.Best!.Bounds.X, foreground.X - 12, foreground.X + 12);
+        Assert.InRange(result.Best.Bounds.Y, foreground.Y - 12, foreground.Y + 12);
+        Assert.InRange(result.Best.Bounds.Right, foreground.Right - 12, foreground.Right + 12);
+        Assert.InRange(result.Best.Bounds.Bottom, foreground.Bottom - 12, foreground.Bottom + 12);
+    }
+
+    [Fact]
     public void FindsWideCenteredImageAgainstBlurredPhoneBackdrop()
     {
         const int imageWidth = 921;
