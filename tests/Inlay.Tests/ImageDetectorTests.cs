@@ -472,32 +472,49 @@ public sealed class ImageDetectorTests
 
         using (var photo = new Mat(image, foreground))
         {
-            // The complete image has visible texture throughout, even in its
-            // lower-detail areas. It is not a blurred extension of the backdrop.
-            for (var y = 0; y < foreground.Height; y += 24)
+            // The full photograph contains smooth, visible color variation.
+            // It is low-detail, but it is not a blurred extension of the backdrop.
+            for (var y = 0; y < foreground.Height; y++)
             {
-                for (var x = 0; x < foreground.Width; x += 24)
+                for (var x = 0; x < foreground.Width; x++)
                 {
-                    var shade = random.Next(55, 205);
-                    Cv2.Rectangle(photo, new Rect(x, y, 16, 16),
-                        new Scalar(shade, shade, shade), -1);
+                    var wave = 18 * Math.Sin(x / 92.0) + 13 * Math.Cos(y / 81.0) +
+                               8 * Math.Sin((x + y) / 143.0);
+                    var baseValue = Math.Clamp(112 + wave, 0, 255);
+                    photo.Set(y, x, new Vec3b(
+                        (byte)Math.Clamp(baseValue - 18, 0, 255),
+                        (byte)Math.Clamp(baseValue + 4, 0, 255),
+                        (byte)Math.Clamp(baseValue + 20, 0, 255)));
                 }
             }
 
-            // This sharp, rectangular region is an object within the image,
-            // not the boundary of the photograph.
+            // A larger, moderately detailed visual element creates a plausible
+            // competing crop around the sharper central subject.
+            var mediumRegion = new Rect(255, 210, 602, 572);
+            for (var y = mediumRegion.Y; y < mediumRegion.Bottom; y += 14)
+            {
+                for (var x = mediumRegion.X; x < mediumRegion.Right; x += 14)
+                {
+                    var shade = random.Next(65, 180);
+                    Cv2.Rectangle(photo, new Rect(x, y, 8, 8),
+                        new Scalar(shade, shade + 8, shade + 16), -1);
+                }
+            }
+
+            // This is the sharp inner region reported by Inlay's diagnostics.
+            // Its boundary is an object/detail boundary, not the photo boundary.
             var inner = new Rect(
                 detailedRegion.X - foreground.X,
                 detailedRegion.Y - foreground.Y,
                 detailedRegion.Width,
                 detailedRegion.Height);
-            for (var y = inner.Y; y < inner.Bottom; y += 5)
+            for (var y = inner.Y; y < inner.Bottom; y += 4)
             {
-                for (var x = inner.X; x < inner.Right; x += 5)
+                for (var x = inner.X; x < inner.Right; x += 4)
                 {
                     var shade = random.Next(0, 256);
-                    Cv2.Rectangle(photo, new Rect(x, y, 3, 3),
-                        new Scalar(shade, shade, shade), -1);
+                    Cv2.Rectangle(photo, new Rect(x, y, 2, 2),
+                        new Scalar(shade, 255 - shade, (shade * 3) % 256), -1);
                 }
             }
         }
