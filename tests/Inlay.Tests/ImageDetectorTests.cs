@@ -190,6 +190,24 @@ public sealed class ImageDetectorTests
     }
 
     [Fact]
+    public void PrefersTheMostlyCenteredForegroundWhenAnotherSharpRegionIsFartherAway()
+    {
+        using var image = new Mat(900, 1400, MatType.CV_8UC3, new Scalar(85, 85, 85));
+        var centered = new Rect(480, 200, 440, 500);
+        var offset = new Rect(1000, 200, 300, 500);
+        DrawTexturedForeground(image, centered, 71);
+        DrawTexturedForeground(image, offset, 71);
+
+        var result = new ImageDetector().Detect(image);
+
+        Assert.NotNull(result.Best);
+        Assert.InRange(result.Best!.Bounds.X, centered.X - 30, centered.X + 30);
+        Assert.InRange(result.Best.Bounds.Y, centered.Y - 30, centered.Y + 30);
+        Assert.InRange(result.Best.Bounds.Width, centered.Width - 45, centered.Width + 45);
+        Assert.InRange(result.Best.Bounds.Height, centered.Height - 45, centered.Height + 45);
+    }
+
+    [Fact]
     public void SofterEdgesCanRecoverALowContrastForegroundBoundary()
     {
         using var image = new Mat(900, 900, MatType.CV_8UC3, new Scalar(100, 100, 100));
