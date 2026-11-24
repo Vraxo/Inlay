@@ -25,10 +25,6 @@ The published files are written to `src/Inlay.Web/bin/Release/net11.0/publish/ww
 
 The browser app accepts batches of up to 50 images (100 MB total, 25 MB per image) and processes them sequentially. Each image shows its own reading, detection, preview, and completion state; finished crops can be inspected and downloaded while the remaining files continue. It also supports direct crop adjustment, corner-radius control, a live PNG preview, and local download. Detection is still experimental; when it cannot find a candidate, you can define the crop manually.
 
-## Model training
-
-The experimental segmentation-model training pipeline lives in [`ml/`](ml/README.md). It generates labelled synthetic screenshots, trains a compact U-Net, and exports ONNX. It is not yet the production detector; real-screenshot validation and local inference integration are required before it can replace the current detector.
-
 ## Requirements
 
 - .NET 11 SDK (11.0.100 or later feature band)
