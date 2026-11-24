@@ -4,7 +4,7 @@ namespace Inlay.Detection;
 
 internal static class CenteredRectangleDetector
 {
-    private const int MaximumSearchDimension = 240;
+    private const int MaximumSearchDimension = 160;
 
     internal static IReadOnlyList<Rect> FindCandidates(Mat focusMap, Mat edges)
     {
@@ -59,6 +59,9 @@ internal static class CenteredRectangleDetector
                             continue;
 
                         var sharpness = MeasureSharpnessSeparation(focus, bounds);
+                        if (sharpness < 0.56)
+                            continue;
+
                         var boundary = MeasureBoundary(edgeMap, bounds);
                         var center = MeasureCenterPreference(bounds, focus.Width, focus.Height);
                         var score = sharpness * 0.72 + boundary * 0.18 + center * 0.10;
@@ -115,13 +118,17 @@ internal static class CenteredRectangleDetector
     private static double Mean(Mat image, Rect bounds)
     {
         double sum = 0;
-        for (var y = bounds.Y; y < bounds.Bottom; y++)
+        var samples = 0;
+        for (var y = bounds.Y; y < bounds.Bottom; y += 2)
         {
-            for (var x = bounds.X; x < bounds.Right; x++)
+            for (var x = bounds.X; x < bounds.Right; x += 2)
+            {
                 sum += image.At<byte>(y, x);
+                samples++;
+            }
         }
 
-        return sum / Math.Max(1, bounds.Width * bounds.Height);
+        return sum / Math.Max(1, samples);
     }
 
     private static double MeasureBoundary(Mat edges, Rect bounds)
