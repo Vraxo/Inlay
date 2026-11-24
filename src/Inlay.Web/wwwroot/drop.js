@@ -292,6 +292,10 @@
                     editor.pixelGrid.style.backgroundSize = `${pixelWidth}px ${pixelHeight}px`;
                     editor.pixelGrid.style.setProperty("--pixel-grid-line-x", `${pixelWidth * 0.48}px`);
                     editor.pixelGrid.style.setProperty("--pixel-grid-line-y", `${pixelHeight * 0.48}px`);
+                    const radius = editor.viewMode === "crop"
+                        ? editor.radius * pixelWidth
+                        : 0;
+                    editor.pixelGrid.style.borderRadius = `${radius}px`;
                 }
             };
 
@@ -489,6 +493,13 @@
         editor.sourceWidth = sourceWidth;
         editor.sourceHeight = sourceHeight;
         editor.viewport = stage.closest(".crop-viewport");
+
+        if (sourceChanged) {
+            editor.viewMode = "original";
+            stage.classList.remove("show-crop-result");
+            for (const button of editor.viewControls)
+                button.setAttribute("aria-pressed", String(button.dataset.viewMode === "original"));
+        }
 
         setCrop(editor, x, y, width, height, radius);
         const cropChanged = previousCrop !== `${editor.x},${editor.y},${editor.width},${editor.height},${editor.radius}`;
