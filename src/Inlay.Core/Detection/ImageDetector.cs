@@ -97,7 +97,8 @@ public sealed class ImageDetector
                 highestConfidence - candidate.Result.Confidence < 0.16 &&
                 CandidateScorer.MeasureCenterPreference(
                     candidate.Result.Bounds, source.Width, source.Height) >= 0.75)
-            .OrderByDescending(candidate => candidate.Result.AreaRatio)
+            .OrderByDescending(candidate => candidate.Result.Confidence)
+            .ThenBy(candidate => candidate.Result.AreaRatio)
             .FirstOrDefault();
 
         // When two centered candidates are nearly tied, prefer the more complete
