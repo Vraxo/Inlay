@@ -54,6 +54,13 @@
         return Math.min(max, Math.max(min, value));
     }
 
+    function getActiveView(editor) {
+        if (editor.viewMode === "crop")
+            return { element: editor.canvas, width: editor.width, height: editor.height };
+
+        return { element: editor.image, width: editor.sourceWidth, height: editor.sourceHeight };
+    }
+
     function setCrop(editor, x, y, width, height, radius) {
         editor.x = clamp(Math.round(x), 0, editor.sourceWidth - 1);
         editor.y = clamp(Math.round(y), 0, editor.sourceHeight - 1);
@@ -263,6 +270,8 @@
             editor.viewport = stage.closest(".crop-viewport");
             editor.pixelGrid = stage.querySelector(".pixel-grid");
             editor.zoomControls = Array.from(stage.closest(".panel").querySelectorAll("[data-zoom]"));
+            editor.viewControls = Array.from(stage.closest(".panel").querySelectorAll("[data-view-mode]"));
+            editor.viewMode = "original";
             editor.zoomFactor = 1;
             editor.panX = 0;
             editor.panY = 0;
@@ -273,15 +282,20 @@
 
             editor.updateTransform = () => {
                 stage.style.transform = `translate3d(${editor.panX}px, ${editor.panY}px, 0) scale(${editor.zoomFactor})`;
+                const view = getActiveView(editor);
                 const sourceZoom = editor.zoomFactor * editor.fitScale;
                 const showGrid = sourceZoom >= 2;
                 stage.classList.toggle("show-pixel-grid", showGrid);
-                if (showGrid) {
-                    const pixelWidth = editor.image.clientWidth / editor.sourceWidth;
-                    const pixelHeight = editor.image.clientHeight / editor.sourceHeight;
+                if (showGrid && view.element.clientWidth && view.element.clientHeight) {
+                    const pixelWidth = view.element.clientWidth / view.width;
+                    const pixelHeight = view.element.clientHeight / view.height;
                     editor.pixelGrid.style.backgroundSize = `${pixelWidth}px ${pixelHeight}px`;
                     editor.pixelGrid.style.setProperty("--pixel-grid-line-x", `${pixelWidth * 0.48}px`);
                     editor.pixelGrid.style.setProperty("--pixel-grid-line-y", `${pixelHeight * 0.48}px`);
+                    const radius = editor.viewMode === "crop"
+                        ? editor.radius * pixelWidth
+                        : 0;
+                    editor.pixelGrid.style.borderRadius = `${radius}px`;
                 }
             };
 
@@ -296,14 +310,27 @@
             };
 
             editor.resetZoom = () => {
-                if (!editor.image.clientWidth || !editor.sourceWidth)
+                const view = getActiveView(editor);
+                if (!view.element.clientWidth || !view.width)
                     return;
-                editor.fitScale = editor.image.clientWidth / editor.sourceWidth;
+                editor.fitScale = view.element.clientWidth / view.width;
                 editor.zoomFactor = 1;
                 editor.panX = 0;
                 editor.panY = 0;
                 editor.updateTransform();
                 editor.updateZoomButtons();
+            };
+
+            editor.setViewMode = mode => {
+                if (mode !== "original" && mode !== "crop" || editor.viewMode === mode)
+                    return;
+
+                editor.viewMode = mode;
+                stage.classList.toggle("show-crop-result", mode === "crop");
+                for (const button of editor.viewControls)
+                    button.setAttribute("aria-pressed", String(button.dataset.viewMode === mode));
+
+                editor.resetZoom();
             };
 
             editor.zoomAt = (nextZoom, clientX, clientY) => {
@@ -432,6 +459,7 @@
             editor.viewport.addEventListener("pointerenter", editor.onViewportEnter);
             editor.viewport.addEventListener("pointerleave", editor.onViewportLeave);
             editor.zoomControls.forEach(button => button.addEventListener("click", () => editor.setZoom(button.dataset.zoom)));
+            editor.viewControls.forEach(button => button.addEventListener("click", () => editor.setViewMode(button.dataset.viewMode)));
             window.addEventListener("keydown", editor.onSpaceDown);
             window.addEventListener("keyup", editor.onSpaceUp);
             window.addEventListener("blur", editor.onWindowBlur);
@@ -453,6 +481,7 @@
         }
 
         const sourceChanged = editor.sourceUrl !== image.src;
+        const previousCrop = `${editor.x},${editor.y},${editor.width},${editor.height},${editor.radius}`;
         editor.image = image;
         editor.sourceUrl = image.src;
         editor.selection = selection;
@@ -465,8 +494,17 @@
         editor.sourceHeight = sourceHeight;
         editor.viewport = stage.closest(".crop-viewport");
 
+        if (sourceChanged) {
+            editor.viewMode = "original";
+            stage.classList.remove("show-crop-result");
+            for (const button of editor.viewControls)
+                button.setAttribute("aria-pressed", String(button.dataset.viewMode === "original"));
+        }
+
         setCrop(editor, x, y, width, height, radius);
-        if (image.complete && image.naturalWidth && (sourceChanged || !editor.fitScale))
+        const cropChanged = previousCrop !== `${editor.x},${editor.y},${editor.width},${editor.height},${editor.radius}`;
+        if (image.complete && image.naturalWidth &&
+            (sourceChanged || !editor.fitScale || editor.viewMode === "crop" && cropChanged))
             editor.resetZoom();
     }
 
