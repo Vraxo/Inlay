@@ -59,6 +59,7 @@ internal static class CandidateScorer
 
     internal static double MeasureSharpnessContrast(Mat focusMap, Rect rect)
     {
+        rect = DetectionGeometry.ClampRect(rect, focusMap.Width, focusMap.Height);
         var insetX = Math.Max(1, rect.Width / 10);
         var insetY = Math.Max(1, rect.Height / 10);
         var inner = DetectionGeometry.ClampRect(
@@ -107,15 +108,27 @@ internal static class CandidateScorer
         var totalArea = 0;
         foreach (var region in regions)
         {
-            if (region.Width <= 0 || region.Height <= 0)
+            var clipped = ClipToImage(region, image.Width, image.Height);
+            if (clipped is not Rect validRegion)
                 continue;
 
-            var area = region.Width * region.Height;
-            weightedSum += Mean(image, region) * area;
+            var area = validRegion.Width * validRegion.Height;
+            weightedSum += Mean(image, validRegion) * area;
             totalArea += area;
         }
 
         return totalArea == 0 ? 0 : weightedSum / totalArea;
+    }
+
+    private static Rect? ClipToImage(Rect bounds, int width, int height)
+    {
+        var left = Math.Clamp(bounds.X, 0, width);
+        var top = Math.Clamp(bounds.Y, 0, height);
+        var right = Math.Clamp(bounds.Right, 0, width);
+        var bottom = Math.Clamp(bounds.Bottom, 0, height);
+        return right <= left || bottom <= top
+            ? null
+            : new Rect(left, top, right - left, bottom - top);
     }
 
     private static double Mean(Mat image, Rect bounds)
