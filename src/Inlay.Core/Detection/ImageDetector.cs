@@ -92,6 +92,7 @@ public sealed class ImageDetector
         var largerAlternative = ranked
             .Where(candidate =>
                 candidate.Result.AreaRatio >= ranked[0].Result.AreaRatio * 2.0 &&
+                candidate.Result.Bounds.Width >= analysis.Width * 0.80 &&
                 highestConfidence - candidate.Result.Confidence < 0.08 &&
                 CandidateScorer.MeasureCenterPreference(
                     candidate.Result.Bounds, analysis.Width, analysis.Height) >= 0.75)
