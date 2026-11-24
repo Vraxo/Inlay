@@ -53,6 +53,21 @@ public sealed class ImageDetectorTests
     }
 
     [Fact]
+    public void RefinesVerticalBoundariesBeyondAnImpreciseCandidate()
+    {
+        using var edges = new Mat(2400, 1080, MatType.CV_8UC1, Scalar.Black);
+        var candidate = new Rect(30, 840, 1020, 720);
+
+        Cv2.Line(edges, new Point(132, 856), new Point(948, 856), Scalar.White, 1);
+        Cv2.Line(edges, new Point(132, 1539), new Point(948, 1539), Scalar.White, 1);
+
+        var topRefined = CropRefiner.RefineTopBoundary(edges, candidate, 24);
+        var refined = CropRefiner.RefineBottomBoundary(edges, topRefined, 48);
+
+        Assert.Equal(new Rect(30, 857, 1020, 683), refined);
+    }
+
+    [Fact]
     public void PortraitCropRefinesOnlyTheTopEdgeAtSourceResolution()
     {
         using var image = new Mat(2400, 1080, MatType.CV_8UC3, new Scalar(85, 85, 85));
