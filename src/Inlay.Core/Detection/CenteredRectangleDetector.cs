@@ -66,7 +66,7 @@ internal static class CenteredRectangleDetector
                         // Large candidates can contain smooth but still in-focus
                         // parts of a photograph. Do not discard them solely because
                         // a smaller subject has much higher local sharpness.
-                        if (sharpness < 0.56 && (areaRatio < 0.25 || boundary < 0.015))
+                        if (sharpness < 0.56 && areaRatio < 0.25)
                             continue;
 
                         var center = MeasureCenterPreference(bounds, focus.Width, focus.Height);
