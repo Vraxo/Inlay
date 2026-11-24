@@ -1443,7 +1443,7 @@ html[data-theme="dark"] .crop-zoom-presets button[aria-pressed="true"] {
     z-index: 1;
     pointer-events: none;
     opacity: 0;
-    background-image: linear-gradient(to right, rgba(20, 20, 20, .48) 1px, transparent 1px), linear-gradient(to bottom, rgba(20, 20, 20, .48) 1px, transparent 1px);
+    background-image: linear-gradient(to right, rgba(20, 20, 20, .48) 0, rgba(20, 20, 20, .48) var(--pixel-grid-line-x, .1px), transparent var(--pixel-grid-line-x, .1px)), linear-gradient(to bottom, rgba(20, 20, 20, .48) 0, rgba(20, 20, 20, .48) var(--pixel-grid-line-y, .1px), transparent var(--pixel-grid-line-y, .1px));
     background-repeat: repeat;
     transition: opacity .12s ease;
 }
@@ -1454,5 +1454,5 @@ html[data-theme="dark"] .crop-zoom-presets button[aria-pressed="true"] {
     z-index: 2;
 }
 html[data-theme="dark"] .pixel-grid {
-    background-image: linear-gradient(to right, rgba(255, 255, 255, .65) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 255, 255, .65) 1px, transparent 1px);
+    background-image: linear-gradient(to right, rgba(255, 255, 255, .65) 0, rgba(255, 255, 255, .65) var(--pixel-grid-line-x, .1px), transparent var(--pixel-grid-line-x, .1px)), linear-gradient(to bottom, rgba(255, 255, 255, .65) 0, rgba(255, 255, 255, .65) var(--pixel-grid-line-y, .1px), transparent var(--pixel-grid-line-y, .1px));
 }
