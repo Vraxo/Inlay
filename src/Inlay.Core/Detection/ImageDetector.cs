@@ -116,7 +116,8 @@ public sealed class ImageDetector
         var finalGeometry = CandidateScorer.MeasureRectangleGeometry(edges, refinedAnalysisBounds);
         var finalSharpness = CandidateScorer.MeasureSharpnessContrast(focusMap, refinedAnalysisBounds);
         var finalConfidence = ScoreCandidate(
-            finalBoundary, finalEdgeStrength, finalGeometry, finalSharpness, finalCornerFit, bestMatch.FromFocusMap);
+            finalBoundary, finalEdgeStrength, finalGeometry, finalSharpness, finalCornerFit,
+            bestMatch.FromFocusMap, refinedAnalysisBounds, analysis.Width, analysis.Height);
 
         best = best with
         {
@@ -170,7 +171,9 @@ public sealed class ImageDetector
         var sharpness = CandidateScorer.MeasureSharpnessContrast(focusMap, bounds);
         var geometry = Math.Max(geometryHint, CandidateScorer.MeasureRectangleGeometry(edges, bounds));
         const double cornerFit = 0.65;
-        var confidence = ScoreCandidate(boundary, edgeStrength, geometry, sharpness, cornerFit, fromFocusMap);
+        var confidence = ScoreCandidate(
+            boundary, edgeStrength, geometry, sharpness, cornerFit, fromFocusMap,
+            bounds, imageWidth, imageHeight);
         var detectionCandidate = new DetectionCandidate(
             DetectionGeometry.ScaleRect(bounds, 1.0 / scale), confidence, boundary, edgeStrength,
             geometry, sharpness, cornerFit, 0, areaRatio);
@@ -194,20 +197,26 @@ public sealed class ImageDetector
         double geometry,
         double sharpness,
         double cornerFit,
-        bool fromFocusMap)
+        bool fromFocusMap,
+        Rect bounds,
+        int imageWidth,
+        int imageHeight)
     {
+        var centerPreference = CandidateScorer.MeasureCenterPreference(bounds, imageWidth, imageHeight);
         if (fromFocusMap)
-            return boundary * 0.10 +
-                   edgeStrength * 0.20 +
-                   geometry * 0.10 +
-                   sharpness * 0.55 +
-                   cornerFit * 0.05;
+            return boundary * 0.092 +
+                   edgeStrength * 0.184 +
+                   geometry * 0.092 +
+                   sharpness * 0.506 +
+                   cornerFit * 0.046 +
+                   centerPreference * 0.08;
 
-        return boundary * 0.30 +
-               edgeStrength * 0.12 +
-               geometry * 0.20 +
-               sharpness * 0.33 +
-               cornerFit * 0.05;
+        return boundary * 0.276 +
+               edgeStrength * 0.1104 +
+               geometry * 0.184 +
+               sharpness * 0.3036 +
+               cornerFit * 0.046 +
+               centerPreference * 0.08;
     }
 
     private sealed record RankedCandidate(DetectionCandidate Result, bool FromFocusMap);
