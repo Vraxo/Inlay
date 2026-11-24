@@ -91,9 +91,10 @@ public sealed class ImageDetector
         var highestConfidence = ranked[0].Result.Confidence;
         var largerAlternative = ranked
             .Where(candidate =>
-                candidate.Result.AreaRatio >= ranked[0].Result.AreaRatio * 2.0 &&
+                ranked[0].Result.AreaRatio < 0.15 &&
+                candidate.Result.AreaRatio >= Math.Max(0.25, ranked[0].Result.AreaRatio * 2.0) &&
                 candidate.Result.Bounds.Width >= analysis.Width * 0.80 &&
-                highestConfidence - candidate.Result.Confidence < 0.08 &&
+                highestConfidence - candidate.Result.Confidence < 0.16 &&
                 CandidateScorer.MeasureCenterPreference(
                     candidate.Result.Bounds, analysis.Width, analysis.Height) >= 0.75)
             .OrderByDescending(candidate => candidate.Result.AreaRatio)
