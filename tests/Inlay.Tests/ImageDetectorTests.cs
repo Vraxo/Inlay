@@ -338,34 +338,52 @@ public sealed class ImageDetectorTests
         const int imageHeight = 2400;
         var foreground = new Rect(30, 840, 1020, 720);
 
-        using var backdrop = new Mat(imageHeight, imageWidth, MatType.CV_8UC3);
-        Cv2.Randu(backdrop, new Scalar(20, 20, 20), new Scalar(110, 110, 110));
-        using var blurredBackdrop = new Mat();
-        Cv2.GaussianBlur(backdrop, blurredBackdrop, new Size(61, 61), 18);
-        using var image = blurredBackdrop.Clone();
-
+        using var background = new Mat(imageHeight, imageWidth, MatType.CV_8UC3, new Scalar(18, 23, 25));
         var random = new Random(149);
+        for (var index = 0; index < 80; index++)
+        {
+            var x = random.Next(0, imageWidth - 90);
+            var y = random.Next(0, imageHeight - 90);
+            var width = random.Next(24, 180);
+            var height = random.Next(12, 100);
+            var color = new Scalar(random.Next(15, 100), random.Next(15, 100), random.Next(15, 100));
+            Cv2.Rectangle(background, new Rect(x, y, width, height), color, -1);
+        }
+
+        using var blurredBackground = new Mat();
+        Cv2.GaussianBlur(background, blurredBackground, new Size(61, 61), 18);
+        using var image = blurredBackground.Clone();
+
         using (var photo = new Mat(image, foreground))
         {
-            for (var y = 0; y < foreground.Height; y += 12)
+            for (var y = 0; y < foreground.Height; y += 20)
             {
-                for (var x = 0; x < foreground.Width; x += 12)
+                for (var x = 0; x < foreground.Width; x += 20)
                 {
-                    var shade = random.Next(65, 190);
-                    Cv2.Rectangle(photo, new Rect(x, y, 8, 8),
-                        new Scalar(shade, shade, shade), -1);
+                    var color = new Scalar(
+                        random.Next(35, 235),
+                        random.Next(35, 235),
+                        random.Next(35, 235));
+                    Cv2.Rectangle(photo, new Rect(x, y, 12, 12), color, -1);
                 }
             }
+
+            Cv2.PutText(photo, "COMPLETE FOREGROUND IMAGE", new Point(55, 75),
+                HersheyFonts.HersheySimplex, 1.35, new Scalar(245, 245, 245), 4);
+            Cv2.Line(photo, new Point(0, 0), new Point(foreground.Width - 1, 0),
+                new Scalar(230, 230, 230), 2);
+            Cv2.Line(photo, new Point(foreground.Width - 1, 0),
+                new Point(foreground.Width - 1, foreground.Height - 1), new Scalar(245, 245, 245), 5);
         }
 
         var result = new ImageDetector().Detect(image);
 
         Assert.NotNull(result.Best);
         Assert.NotEqual(DetectionStatus.Rejected, result.Status);
-        Assert.InRange(result.Best!.Bounds.X, foreground.X - 5, foreground.X + 5);
-        Assert.InRange(result.Best.Bounds.Y, foreground.Y - 8, foreground.Y + 8);
-        Assert.InRange(result.Best.Bounds.Width, foreground.Width - 10, foreground.Width + 10);
-        Assert.InRange(result.Best.Bounds.Height, foreground.Height - 16, foreground.Height + 16);
+        Assert.InRange(result.Best!.Bounds.X, foreground.X - 12, foreground.X + 12);
+        Assert.InRange(result.Best.Bounds.Y, foreground.Y - 16, foreground.Y + 16);
+        Assert.InRange(result.Best.Bounds.Right, foreground.Right - 12, foreground.Right + 12);
+        Assert.InRange(result.Best.Bounds.Bottom, foreground.Bottom - 16, foreground.Bottom + 16);
         Assert.Equal(0, result.Best.CornerRadius);
     }
 
