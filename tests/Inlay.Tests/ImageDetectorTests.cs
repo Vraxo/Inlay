@@ -190,6 +190,25 @@ public sealed class ImageDetectorTests
     }
 
     [Fact]
+    public void CenteredForegroundReceivesAHigherScoreThanAnOtherwiseIdenticalOffsetForeground()
+    {
+        using var centeredImage = new Mat(900, 1400, MatType.CV_8UC3, new Scalar(85, 85, 85));
+        using var offsetImage = new Mat(900, 1400, MatType.CV_8UC3, new Scalar(85, 85, 85));
+        DrawTexturedForeground(centeredImage, new Rect(480, 200, 440, 500), 71);
+        DrawTexturedForeground(offsetImage, new Rect(900, 200, 440, 500), 71);
+
+        var detector = new ImageDetector();
+        var centeredResult = detector.Detect(centeredImage);
+        var offsetResult = detector.Detect(offsetImage);
+
+        Assert.NotNull(centeredResult.Best);
+        Assert.NotNull(offsetResult.Best);
+        Assert.True(
+            centeredResult.Best!.Confidence > offsetResult.Best!.Confidence,
+            $"Expected centered score {centeredResult.Best.Confidence:F3} to exceed offset score {offsetResult.Best.Confidence:F3}.");
+    }
+
+    [Fact]
     public void SofterEdgesCanRecoverALowContrastForegroundBoundary()
     {
         using var image = new Mat(900, 900, MatType.CV_8UC3, new Scalar(100, 100, 100));
