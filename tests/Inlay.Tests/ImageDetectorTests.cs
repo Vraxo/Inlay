@@ -445,4 +445,96 @@ public sealed class ImageDetectorTests
         Assert.InRange(result.Best.Bounds.Right, foreground.Right - 25, foreground.Right + 25);
         Assert.InRange(result.Best.Bounds.Bottom, foreground.Bottom - 25, foreground.Bottom + 25);
     }
+
+    [Fact]
+    public void PrefersTheCompleteImageOverASharperRectangularRegionInsideIt()
+    {
+        const int imageWidth = 1080;
+        const int imageHeight = 2400;
+        var foreground = new Rect(29, 729, 1022, 942);
+        var detailedRegion = new Rect(360, 900, 375, 600);
+
+        using var background = new Mat(imageHeight, imageWidth, MatType.CV_8UC3, new Scalar(18, 23, 25));
+        var random = new Random(163);
+        for (var index = 0; index < 100; index++)
+        {
+            var x = random.Next(0, imageWidth - 90);
+            var y = random.Next(0, imageHeight - 90);
+            var width = random.Next(24, 180);
+            var height = random.Next(12, 100);
+            var color = new Scalar(random.Next(15, 100), random.Next(15, 100), random.Next(15, 100));
+            Cv2.Rectangle(background, new Rect(x, y, width, height), color, -1);
+        }
+
+        using var blurredBackground = new Mat();
+        Cv2.GaussianBlur(background, blurredBackground, new Size(61, 61), 18);
+        using var image = blurredBackground.Clone();
+
+        using (var photo = new Mat(image, foreground))
+        {
+            // The full photograph contains smooth, visible color variation.
+            // It is low-detail, but it is not a blurred extension of the backdrop.
+            for (var y = 0; y < foreground.Height; y++)
+            {
+                for (var x = 0; x < foreground.Width; x++)
+                {
+                    var wave = 18 * Math.Sin(x / 92.0) + 13 * Math.Cos(y / 81.0) +
+                               8 * Math.Sin((x + y) / 143.0);
+                    var baseValue = Math.Clamp(112 + wave, 0, 255);
+                    photo.Set(y, x, new Vec3b(
+                        (byte)Math.Clamp(baseValue - 18, 0, 255),
+                        (byte)Math.Clamp(baseValue + 4, 0, 255),
+                        (byte)Math.Clamp(baseValue + 20, 0, 255)));
+                }
+            }
+
+            // A larger, moderately detailed visual element creates a plausible
+            // competing crop around the sharper central subject.
+            var mediumRegion = new Rect(255, 210, 602, 572);
+            for (var y = mediumRegion.Y; y < mediumRegion.Bottom; y += 14)
+            {
+                for (var x = mediumRegion.X; x < mediumRegion.Right; x += 14)
+                {
+                    var shade = random.Next(65, 180);
+                    Cv2.Rectangle(photo, new Rect(x, y, 8, 8),
+                        new Scalar(shade, shade + 8, shade + 16), -1);
+                }
+            }
+
+            // This is the sharp inner region reported by Inlay's diagnostics.
+            // Its boundary is an object/detail boundary, not the photo boundary.
+            var inner = new Rect(
+                detailedRegion.X - foreground.X,
+                detailedRegion.Y - foreground.Y,
+                detailedRegion.Width,
+                detailedRegion.Height);
+            for (var y = inner.Y; y < inner.Bottom; y += 4)
+            {
+                for (var x = inner.X; x < inner.Right; x += 4)
+                {
+                    var shade = random.Next(0, 256);
+                    Cv2.Rectangle(photo, new Rect(x, y, 2, 2),
+                        new Scalar(shade, 255 - shade, (shade * 3) % 256), -1);
+                }
+            }
+        }
+
+        var result = new ImageDetector().Detect(image);
+
+        Assert.NotNull(result.Best);
+        Assert.NotEqual(DetectionStatus.Rejected, result.Status);
+
+        var best = result.Best!;
+        var isCompleteImage =
+            Math.Abs(best.Bounds.X - foreground.X) <= 25 &&
+            Math.Abs(best.Bounds.Y - foreground.Y) <= 25 &&
+            Math.Abs(best.Bounds.Right - foreground.Right) <= 25 &&
+            Math.Abs(best.Bounds.Bottom - foreground.Bottom) <= 25;
+        Assert.True(
+            isCompleteImage,
+            $"Expected {foreground}; detected {best.Bounds} (confidence {best.Confidence:F3}, " +
+            $"boundary {best.BoundaryContinuity:F3}, geometry {best.GeometryFit:F3}, " +
+            $"sharpness {best.SharpnessContrast:F3}, area {best.AreaRatio:F3}). " +
+            $"Second: {result.Second?.Bounds}, confidence {result.Second?.Confidence:F3}.");
+    }
 }
