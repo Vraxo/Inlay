@@ -39,7 +39,9 @@ internal static class CornerRadiusEstimator
             estimates.Add((int)Math.Round(plateau.Average()));
         }
 
-        if (estimates.Count < 3)
+        // Rounded-corner evidence must be visible at every corner. Three
+        // nearby text or image details are not enough to imply a rounded crop.
+        if (estimates.Count != 4)
             return 0;
 
         estimates.Sort();
@@ -49,7 +51,7 @@ internal static class CornerRadiusEstimator
             : estimates[middle];
         var tolerance = Math.Max(5, median * 0.20);
         var consistent = estimates.Where(radius => Math.Abs(radius - median) <= tolerance).ToArray();
-        if (consistent.Length < 3)
+        if (consistent.Length != 4)
             return 0;
 
         return (int)Math.Round(consistent.Average());
