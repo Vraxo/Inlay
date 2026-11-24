@@ -99,32 +99,43 @@ internal static class CropRefiner
         return wider.Bounds.Width > 0 ? wider.Bounds : bounds;
     }
 
-    internal static Rect RefineTopBoundary(Mat edges, Rect bounds, int searchRadius)
+    internal static Rect RefineTopBoundary(Mat edges, Mat focusMap, Rect bounds, int searchRadius)
     {
         var horizontalInset = Math.Max(2, bounds.Width / 10);
         var lineX = bounds.X + horizontalInset;
         var lineWidth = bounds.Width - horizontalInset * 2;
-        if (lineWidth < 20 || bounds.Height < 20)
+        if (lineWidth < 20 || bounds.Height < 20 ||
+            focusMap.Width != edges.Width || focusMap.Height != edges.Height)
             return bounds;
 
         var bandHeight = Math.Clamp(lineWidth / 40, 12, 32);
         var firstEdgeRow = Math.Max(bandHeight, bounds.Y - searchRadius - 1);
         var lastEdgeRow = Math.Min(edges.Height - bandHeight - 2, bounds.Y + searchRadius - 1);
+        if (firstEdgeRow > lastEdgeRow)
+            return bounds;
+
+        using var focusRegion = new Mat(focusMap, new Rect(lineX, 0, lineWidth, focusMap.Height));
+        using var rowAverages = new Mat();
+        Cv2.Reduce(focusRegion, rowAverages, 1, ReduceTypes.Avg, MatType.CV_32F);
+
+        var prefix = new double[focusMap.Height + 1];
+        for (var row = 0; row < focusMap.Height; row++)
+            prefix[row + 1] = prefix[row] + rowAverages.At<float>(row, 0);
+
         var bestEdgeRow = bounds.Y - 1;
         var bestScore = 0.0;
         var bestTransition = 0.0;
-        var bestInsideDensity = 0.0;
-        var bestBoundaryStrength = 0.0;
+        var bestDifference = 0.0;
 
         for (var row = firstEdgeRow; row <= lastEdgeRow; row++)
         {
-            var outsideDensity = MeasureEdgeDensity(edges, lineX, row - bandHeight, lineWidth, bandHeight);
-            var insideDensity = MeasureEdgeDensity(edges, lineX, row + 1, lineWidth, bandHeight);
-            var transition = (insideDensity - outsideDensity) /
-                             Math.Max(0.02, insideDensity + outsideDensity);
+            var outside = (prefix[row] - prefix[row - bandHeight]) / bandHeight;
+            var inside = (prefix[row + bandHeight + 1] - prefix[row + 1]) / bandHeight;
+            var difference = inside - outside;
+            var transition = difference / Math.Max(8.0, inside + outside);
             var boundaryStrength = DetectionGeometry.CountEdges(edges, new Rect(lineX, row, lineWidth, 1)) /
                                    (double)lineWidth;
-            var score = transition * 0.8 + Math.Min(boundaryStrength / 0.12, 1.0) * 0.2;
+            var score = transition * 0.85 + Math.Min(boundaryStrength / 0.10, 1.0) * 0.15;
 
             if (score <= bestScore)
                 continue;
@@ -132,14 +143,15 @@ internal static class CropRefiner
             bestEdgeRow = row;
             bestScore = score;
             bestTransition = transition;
-            bestInsideDensity = insideDensity;
-            bestBoundaryStrength = boundaryStrength;
+            bestDifference = difference;
         }
 
-        // A real image boundary separates a low-detail blurred backdrop from
-        // a sharper region. Internal details may have stronger individual
-        // edge rows, but they do not create the same sustained density change.
-        if (bestTransition < 0.12 || bestInsideDensity < 0.02 || bestBoundaryStrength < 0.015)
+        // The focus map measures high-frequency detail across the whole image
+        // width. A photo boundary creates a sustained jump from its blurred
+        // backdrop, even when the exact border has little Canny edge response.
+        // This lets us search beyond the old 24 px local-edge fallback without
+        // mistaking a single strong line inside the photograph for its edge.
+        if (bestTransition < 0.12 || bestDifference < 2.0)
             return RefineTopBoundaryNearOriginal(edges, bounds, searchRadius, lineX, lineWidth);
 
         var refinedY = bestEdgeRow + 1;
