@@ -75,20 +75,52 @@ internal static class CandidateScorer
             focusMap.Width,
             focusMap.Height);
 
-        using var innerRegion = new Mat(focusMap, inner);
-        using var outerRegion = new Mat(focusMap, outer);
-        var innerArea = (double)inner.Width * inner.Height;
-        var outerArea = (double)outer.Width * outer.Height;
-        var ringArea = outerArea - innerArea;
-        if (ringArea <= 0)
-            return 0.5;
-
-        var innerSharpness = Cv2.Mean(innerRegion).Val0;
-        var outerMean = Cv2.Mean(outerRegion).Val0;
-        var surroundingSharpness = Math.Max(0, (outerMean * outerArea - innerSharpness * innerArea) / ringArea);
+        var innerSharpness = Mean(focusMap, inner);
+        var surroundingSharpness = MeasureOutsideMean(focusMap, rect, outer);
         var contrast = (innerSharpness - surroundingSharpness) /
                        Math.Max(8.0, innerSharpness + surroundingSharpness);
 
-        return Math.Clamp(0.5 + contrast * 1.4, 0, 1);
+        // Keep the full contrast range. A steeper multiplier saturates both
+        // small detailed patches and the complete foreground image at 1.0.
+        return Math.Clamp(0.5 + contrast * 0.5, 0, 1);
+    }
+
+    private static double MeasureOutsideMean(Mat image, Rect bounds, Rect outer)
+    {
+        var regions = new[]
+        {
+            bounds.Y > outer.Y
+                ? new Rect(outer.X, outer.Y, outer.Width, bounds.Y - outer.Y)
+                : default,
+            bounds.Bottom < outer.Bottom
+                ? new Rect(outer.X, bounds.Bottom, outer.Width, outer.Bottom - bounds.Bottom)
+                : default,
+            bounds.X > outer.X
+                ? new Rect(outer.X, bounds.Y, bounds.X - outer.X, bounds.Height)
+                : default,
+            bounds.Right < outer.Right
+                ? new Rect(bounds.Right, bounds.Y, outer.Right - bounds.Right, bounds.Height)
+                : default
+        };
+
+        double weightedSum = 0;
+        var totalArea = 0;
+        foreach (var region in regions)
+        {
+            if (region.Width <= 0 || region.Height <= 0)
+                continue;
+
+            var area = region.Width * region.Height;
+            weightedSum += Mean(image, region) * area;
+            totalArea += area;
+        }
+
+        return totalArea == 0 ? 0 : weightedSum / totalArea;
+    }
+
+    private static double Mean(Mat image, Rect bounds)
+    {
+        using var region = new Mat(image, bounds);
+        return Cv2.Mean(region).Val0;
     }
 }
