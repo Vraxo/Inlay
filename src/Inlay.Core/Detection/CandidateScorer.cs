@@ -4,6 +4,18 @@ namespace Inlay.Detection;
 
 internal static class CandidateScorer
 {
+    internal static double MeasureCenterPreference(Rect bounds, int imageWidth, int imageHeight)
+    {
+        var offsetX = (bounds.X + bounds.Width / 2.0 - imageWidth / 2.0) / (imageWidth / 2.0);
+        var offsetY = (bounds.Y + bounds.Height / 2.0 - imageHeight / 2.0) / (imageHeight / 2.0);
+        var distance = Math.Sqrt(offsetX * offsetX + offsetY * offsetY);
+
+        // A soft prior: centered candidates receive a modest boost, while
+        // plausible off-center candidates remain eligible.
+        const double falloff = 0.55;
+        return Math.Exp(-(distance * distance) / (2 * falloff * falloff));
+    }
+
     internal static double MeasureRectangleGeometry(Mat edges, Rect rect)
     {
         var thickness = Math.Max(1, Math.Min(3, Math.Min(rect.Width, rect.Height) / 100));
