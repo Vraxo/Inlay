@@ -523,9 +523,18 @@ public sealed class ImageDetectorTests
 
         Assert.NotNull(result.Best);
         Assert.NotEqual(DetectionStatus.Rejected, result.Status);
-        Assert.InRange(result.Best!.Bounds.X, foreground.X - 25, foreground.X + 25);
-        Assert.InRange(result.Best.Bounds.Y, foreground.Y - 25, foreground.Y + 25);
-        Assert.InRange(result.Best.Bounds.Right, foreground.Right - 25, foreground.Right + 25);
-        Assert.InRange(result.Best.Bounds.Bottom, foreground.Bottom - 25, foreground.Bottom + 25);
+
+        var best = result.Best!;
+        var isCompleteImage =
+            Math.Abs(best.Bounds.X - foreground.X) <= 25 &&
+            Math.Abs(best.Bounds.Y - foreground.Y) <= 25 &&
+            Math.Abs(best.Bounds.Right - foreground.Right) <= 25 &&
+            Math.Abs(best.Bounds.Bottom - foreground.Bottom) <= 25;
+        Assert.True(
+            isCompleteImage,
+            $"Expected {foreground}; detected {best.Bounds} (confidence {best.Confidence:F3}, " +
+            $"boundary {best.BoundaryContinuity:F3}, geometry {best.GeometryFit:F3}, " +
+            $"sharpness {best.SharpnessContrast:F3}, area {best.AreaRatio:F3}). " +
+            $"Second: {result.Second?.Bounds}, confidence {result.Second?.Confidence:F3}.");
     }
 }
