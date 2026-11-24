@@ -79,6 +79,7 @@
         editor.readout.textContent = `X ${editor.x} · Y ${editor.y} · ${editor.width} × ${editor.height} px`;
 
         drawPreview(editor);
+        editor.drawPixelGrid?.();
     }
 
     function drawPreview(editor) {
@@ -268,7 +269,7 @@
             };
 
             editor.viewport = stage.closest(".crop-viewport");
-            editor.pixelGrid = stage.querySelector(".pixel-grid");
+            editor.pixelGrid = stage.closest(".crop-viewport").querySelector(".pixel-grid-overlay");
             editor.zoomControls = Array.from(stage.closest(".panel").querySelectorAll("[data-zoom]"));
             editor.viewControls = Array.from(stage.closest(".panel").querySelectorAll("[data-view-mode]"));
             editor.viewMode = "original";
@@ -280,23 +281,103 @@
             editor.panDrag = null;
             editor.fitScale = 0;
 
+            editor.drawPixelGrid = () => {
+                const grid = editor.pixelGrid;
+                const viewport = editor.viewport;
+                if (!grid || !viewport)
+                    return;
+
+                const viewportBounds = viewport.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                const pixelWidth = Math.max(1, Math.round(viewport.clientWidth * dpr));
+                const pixelHeight = Math.max(1, Math.round(viewport.clientHeight * dpr));
+
+                if (grid.width !== pixelWidth)
+                    grid.width = pixelWidth;
+                if (grid.height !== pixelHeight)
+                    grid.height = pixelHeight;
+
+                const context = grid.getContext("2d");
+                context.setTransform(1, 0, 0, 1, 0, 0);
+                context.clearRect(0, 0, pixelWidth, pixelHeight);
+
+                const view = getActiveView(editor);
+                if (!view.element.clientWidth || !view.width || !view.height)
+                    return;
+
+                const bounds = view.element.getBoundingClientRect();
+                const sourcePixelWidth = bounds.width / view.width;
+                const sourcePixelHeight = bounds.height / view.height;
+
+                // At smaller sizes a full grid becomes visual noise rather than a useful pixel guide.
+                if (sourcePixelWidth < 3 || sourcePixelHeight < 3)
+                    return;
+
+                let left = bounds.left - viewportBounds.left;
+                let top = bounds.top - viewportBounds.top;
+                let width = bounds.width;
+                let height = bounds.height;
+
+                if (editor.viewMode === "original") {
+                    left += editor.x * sourcePixelWidth;
+                    top += editor.y * sourcePixelHeight;
+                    width = editor.width * sourcePixelWidth;
+                    height = editor.height * sourcePixelHeight;
+                }
+
+                const right = left + width;
+                const bottom = top + height;
+                if (right <= 0 || bottom <= 0 ||
+                    left >= viewportBounds.width || top >= viewportBounds.height)
+                    return;
+
+                const scale = dpr;
+                context.save();
+                context.beginPath();
+
+                const radius = editor.viewMode === "crop"
+                    ? editor.radius * Math.min(sourcePixelWidth, sourcePixelHeight)
+                    : 0;
+                const x = left * scale;
+                const y = top * scale;
+                const w = width * scale;
+                const h = height * scale;
+                const r = Math.max(0, Math.min(radius * scale, w / 2, h / 2));
+
+                if (r > 0)
+                    context.roundRect(x, y, w, h, r);
+                else
+                    context.rect(x, y, w, h);
+                context.clip();
+
+                const dark = document.documentElement.dataset.theme === "dark";
+                context.strokeStyle = dark ? "rgba(255,255,255,.48)" : "rgba(25,25,25,.42)";
+                context.lineWidth = 1;
+                context.beginPath();
+
+                const startX = Math.max(1, Math.ceil(-left / sourcePixelWidth));
+                const endX = Math.min(view.width - 1, Math.floor((viewportBounds.width - left) / sourcePixelWidth));
+                for (let column = startX; column <= endX; column++) {
+                    const lineX = Math.round((left + column * sourcePixelWidth) * scale) + .5;
+                    context.moveTo(lineX, Math.max(0, top * scale));
+                    context.lineTo(lineX, Math.min(pixelHeight, bottom * scale));
+                }
+
+                const startY = Math.max(1, Math.ceil(-top / sourcePixelHeight));
+                const endY = Math.min(view.height - 1, Math.floor((viewportBounds.height - top) / sourcePixelHeight));
+                for (let row = startY; row <= endY; row++) {
+                    const lineY = Math.round((top + row * sourcePixelHeight) * scale) + .5;
+                    context.moveTo(Math.max(0, left * scale), lineY);
+                    context.lineTo(Math.min(pixelWidth, right * scale), lineY);
+                }
+
+                context.stroke();
+                context.restore();
+            };
+
             editor.updateTransform = () => {
                 stage.style.transform = `translate3d(${editor.panX}px, ${editor.panY}px, 0) scale(${editor.zoomFactor})`;
-                const view = getActiveView(editor);
-                const sourceZoom = editor.zoomFactor * editor.fitScale;
-                const showGrid = sourceZoom >= 2;
-                stage.classList.toggle("show-pixel-grid", showGrid);
-                if (showGrid && view.element.clientWidth && view.element.clientHeight) {
-                    const pixelWidth = view.element.clientWidth / view.width;
-                    const pixelHeight = view.element.clientHeight / view.height;
-                    editor.pixelGrid.style.backgroundSize = `${pixelWidth}px ${pixelHeight}px`;
-                    editor.pixelGrid.style.setProperty("--pixel-grid-line-x", `${pixelWidth * 0.48}px`);
-                    editor.pixelGrid.style.setProperty("--pixel-grid-line-y", `${pixelHeight * 0.48}px`);
-                    const radius = editor.viewMode === "crop"
-                        ? editor.radius * pixelWidth
-                        : 0;
-                    editor.pixelGrid.style.borderRadius = `${radius}px`;
-                }
+                editor.drawPixelGrid();
             };
 
             editor.updateZoomButtons = () => {
