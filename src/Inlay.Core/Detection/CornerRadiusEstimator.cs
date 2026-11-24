@@ -68,9 +68,11 @@ internal static class CornerRadiusEstimator
         var centerY = verticalSign < 0
             ? bounds.Top + radius
             : bounds.Bottom - 1 - radius;
-        var sampleCount = Math.Clamp(radius / 3, 6, 32);
-        var firstAngle = Math.PI / 6;
-        var lastAngle = Math.PI / 3;
+        // Check most of the quarter-circle. A narrow central arc can be
+        // accidentally matched by nearby text or graphics on square corners.
+        var sampleCount = Math.Clamp(radius / 2, 12, 48);
+        var firstAngle = Math.PI / 12;
+        var lastAngle = Math.PI * 5 / 12;
         var hits = 0;
 
         for (var sample = 0; sample <= sampleCount; sample++)
