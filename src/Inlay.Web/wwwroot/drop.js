@@ -274,12 +274,14 @@
             editor.updateTransform = () => {
                 stage.style.transform = `translate3d(${editor.panX}px, ${editor.panY}px, 0) scale(${editor.zoomFactor})`;
                 const sourceZoom = editor.zoomFactor * editor.fitScale;
-                const showGrid = sourceZoom >= 3;
+                const showGrid = sourceZoom >= 2;
                 stage.classList.toggle("show-pixel-grid", showGrid);
                 if (showGrid) {
                     const pixelWidth = editor.image.clientWidth / editor.sourceWidth;
                     const pixelHeight = editor.image.clientHeight / editor.sourceHeight;
                     editor.pixelGrid.style.backgroundSize = `${pixelWidth}px ${pixelHeight}px`;
+                    editor.pixelGrid.style.setProperty("--pixel-grid-line-x", `${pixelWidth * 0.24}px`);
+                    editor.pixelGrid.style.setProperty("--pixel-grid-line-y", `${pixelHeight * 0.24}px`);
                 }
             };
 
