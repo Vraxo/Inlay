@@ -209,6 +209,28 @@ public sealed class ImageDetectorTests
     }
 
     [Fact]
+    public void FindsMostlyCenteredPortraitImageAgainstUniformlyBlurredBackground()
+    {
+        using var background = new Mat(1920, 1080, MatType.CV_8UC3);
+        Cv2.Randu(background, new Scalar(0, 0, 0), new Scalar(256, 256, 256));
+        using var image = new Mat();
+        Cv2.GaussianBlur(background, image, new Size(61, 61), 16);
+
+        var foreground = new Rect(250, 500, 580, 850);
+        using (var region = new Mat(image, foreground))
+            Cv2.Randu(region, new Scalar(0, 0, 0), new Scalar(256, 256, 256));
+
+        var result = new ImageDetector().Detect(image);
+
+        Assert.NotNull(result.Best);
+        Assert.NotEqual(DetectionStatus.Rejected, result.Status);
+        Assert.InRange(result.Best!.Bounds.X, foreground.X - 55, foreground.X + 55);
+        Assert.InRange(result.Best.Bounds.Y, foreground.Y - 55, foreground.Y + 55);
+        Assert.InRange(result.Best.Bounds.Width, foreground.Width - 65, foreground.Width + 65);
+        Assert.InRange(result.Best.Bounds.Height, foreground.Height - 65, foreground.Height + 65);
+    }
+
+    [Fact]
     public void SofterEdgesCanRecoverALowContrastForegroundBoundary()
     {
         using var image = new Mat(900, 900, MatType.CV_8UC3, new Scalar(100, 100, 100));
