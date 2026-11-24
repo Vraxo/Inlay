@@ -280,8 +280,8 @@
                     const pixelWidth = editor.image.clientWidth / editor.sourceWidth;
                     const pixelHeight = editor.image.clientHeight / editor.sourceHeight;
                     editor.pixelGrid.style.backgroundSize = `${pixelWidth}px ${pixelHeight}px`;
-                    editor.pixelGrid.style.setProperty("--pixel-grid-line-x", `${pixelWidth * 0.24}px`);
-                    editor.pixelGrid.style.setProperty("--pixel-grid-line-y", `${pixelHeight * 0.24}px`);
+                    editor.pixelGrid.style.setProperty("--pixel-grid-line-x", `${pixelWidth * 0.48}px`);
+                    editor.pixelGrid.style.setProperty("--pixel-grid-line-y", `${pixelHeight * 0.48}px`);
                 }
             };
 
