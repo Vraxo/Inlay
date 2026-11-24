@@ -58,7 +58,7 @@ internal static class CenteredRectangleDetector
                             bounds.Right > focus.Width || bounds.Bottom > focus.Height)
                             continue;
 
-                        var sharpness = MeasureSharpnessSeparation(focus, bounds);
+                        var sharpness = CandidateScorer.MeasureSharpnessContrast(focus, bounds);
                         if (sharpness < 0.56)
                             continue;
 
@@ -83,52 +83,6 @@ internal static class CenteredRectangleDetector
         }
 
         return results;
-    }
-
-    private static double MeasureSharpnessSeparation(Mat focus, Rect bounds)
-    {
-        var insetX = Math.Max(1, bounds.Width / 12);
-        var insetY = Math.Max(1, bounds.Height / 12);
-        var inner = new Rect(
-            bounds.X + insetX,
-            bounds.Y + insetY,
-            bounds.Width - insetX * 2,
-            bounds.Height - insetY * 2);
-        var marginX = Math.Max(2, bounds.Width / 18);
-        var marginY = Math.Max(2, bounds.Height / 18);
-        var outer = DetectionGeometry.ClampRect(
-            new Rect(bounds.X - marginX, bounds.Y - marginY,
-                bounds.Width + marginX * 2, bounds.Height + marginY * 2),
-            focus.Width,
-            focus.Height);
-
-        var insideMean = Mean(focus, inner);
-        var outsideMean = Mean(focus, outer);
-        var innerArea = (double)inner.Width * inner.Height;
-        var outerArea = (double)outer.Width * outer.Height;
-        var ringArea = outerArea - innerArea;
-        if (ringArea <= 0)
-            return 0.5;
-
-        var ringMean = Math.Max(0, (outsideMean * outerArea - insideMean * innerArea) / ringArea);
-        var contrast = (insideMean - ringMean) / Math.Max(8, insideMean + ringMean);
-        return Math.Clamp(0.5 + contrast * 1.5, 0, 1);
-    }
-
-    private static double Mean(Mat image, Rect bounds)
-    {
-        double sum = 0;
-        var samples = 0;
-        for (var y = bounds.Y; y < bounds.Bottom; y += 2)
-        {
-            for (var x = bounds.X; x < bounds.Right; x += 2)
-            {
-                sum += image.At<byte>(y, x);
-                samples++;
-            }
-        }
-
-        return sum / Math.Max(1, samples);
     }
 
     private static double MeasureBoundary(Mat edges, Rect bounds)
