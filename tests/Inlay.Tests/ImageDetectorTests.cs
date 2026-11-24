@@ -282,6 +282,7 @@ public sealed class ImageDetectorTests
         Assert.InRange(result.Best.Bounds.Right, foreground.Right - 30, foreground.Right + 30);
         Assert.InRange(result.Best.Bounds.Bottom, foreground.Bottom - 30, foreground.Bottom + 30);
         Assert.True(result.Best.Bounds.Width > result.Best.Bounds.Height);
+        Assert.Equal(0, result.Best.CornerRadius);
     }
 
     [Fact]
