@@ -209,6 +209,65 @@ public sealed class ImageDetectorTests
     }
 
     [Fact]
+    public void FindsWideCenteredImageAgainstBlurredPhoneBackdrop()
+    {
+        const int imageWidth = 921;
+        const int imageHeight = 2048;
+        var foreground = new Rect(25, 727, 870, 587);
+
+        using var background = new Mat(imageHeight, imageWidth, MatType.CV_8UC3, new Scalar(18, 23, 25));
+        var random = new Random(43);
+
+        for (var index = 0; index < 80; index++)
+        {
+            var x = random.Next(0, imageWidth - 90);
+            var y = random.Next(0, imageHeight - 90);
+            var width = random.Next(24, 180);
+            var height = random.Next(12, 100);
+            var color = new Scalar(random.Next(15, 100), random.Next(15, 100), random.Next(15, 100));
+            Cv2.Rectangle(background, new Rect(x, y, width, height), color, -1);
+        }
+
+        using var blurredBackground = new Mat();
+        Cv2.GaussianBlur(background, blurredBackground, new Size(61, 61), 18);
+        using var image = blurredBackground.Clone();
+
+        using (var photo = new Mat(image, foreground))
+        {
+            for (var y = 0; y < foreground.Height; y += 20)
+            {
+                for (var x = 0; x < foreground.Width; x += 20)
+                {
+                    var color = new Scalar(
+                        random.Next(35, 235),
+                        random.Next(35, 235),
+                        random.Next(35, 235));
+                    Cv2.Rectangle(photo, new Rect(x, y, 12, 12), color, -1);
+                }
+            }
+
+            Cv2.PutText(photo, "ACTUALLY SHUT UP", new Point(35, 72),
+                HersheyFonts.HersheySimplex, 1.55, new Scalar(245, 245, 245), 4);
+            Cv2.PutText(photo, "FOREGROUND IMAGE", new Point(90, 490),
+                HersheyFonts.HersheySimplex, 1.15, new Scalar(235, 235, 235), 3);
+            Cv2.Line(photo, new Point(0, 0), new Point(foreground.Width - 1, 0),
+                new Scalar(230, 230, 230), 2);
+            Cv2.Line(photo, new Point(foreground.Width - 1, 0),
+                new Point(foreground.Width - 1, foreground.Height - 1), new Scalar(245, 245, 245), 5);
+        }
+
+        var result = new ImageDetector().Detect(image);
+
+        Assert.NotNull(result.Best);
+        Assert.NotEqual(DetectionStatus.Rejected, result.Status);
+        Assert.InRange(result.Best!.Bounds.X, foreground.X - 30, foreground.X + 30);
+        Assert.InRange(result.Best.Bounds.Y, foreground.Y - 30, foreground.Y + 30);
+        Assert.InRange(result.Best.Bounds.Right, foreground.Right - 30, foreground.Right + 30);
+        Assert.InRange(result.Best.Bounds.Bottom, foreground.Bottom - 30, foreground.Bottom + 30);
+        Assert.True(result.Best.Bounds.Width > result.Best.Bounds.Height);
+    }
+
+    [Fact]
     public void FindsMostlyCenteredPortraitImageAgainstUniformlyBlurredBackground()
     {
         using var background = new Mat(1920, 1080, MatType.CV_8UC3);
