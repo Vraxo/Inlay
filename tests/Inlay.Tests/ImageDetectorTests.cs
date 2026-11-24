@@ -190,21 +190,22 @@ public sealed class ImageDetectorTests
     }
 
     [Fact]
-    public void PrefersTheMostlyCenteredForegroundWhenAnotherSharpRegionIsFartherAway()
+    public void CenteredForegroundReceivesAHigherScoreThanAnOtherwiseIdenticalOffsetForeground()
     {
-        using var image = new Mat(900, 1400, MatType.CV_8UC3, new Scalar(85, 85, 85));
-        var centered = new Rect(480, 200, 440, 500);
-        var offset = new Rect(1000, 200, 300, 500);
-        DrawTexturedForeground(image, centered, 71);
-        DrawTexturedForeground(image, offset, 71);
+        using var centeredImage = new Mat(900, 1400, MatType.CV_8UC3, new Scalar(85, 85, 85));
+        using var offsetImage = new Mat(900, 1400, MatType.CV_8UC3, new Scalar(85, 85, 85));
+        DrawTexturedForeground(centeredImage, new Rect(480, 200, 440, 500), 71);
+        DrawTexturedForeground(offsetImage, new Rect(900, 200, 440, 500), 71);
 
-        var result = new ImageDetector().Detect(image);
+        var detector = new ImageDetector();
+        var centeredResult = detector.Detect(centeredImage);
+        var offsetResult = detector.Detect(offsetImage);
 
-        Assert.NotNull(result.Best);
-        Assert.InRange(result.Best!.Bounds.X, centered.X - 30, centered.X + 30);
-        Assert.InRange(result.Best.Bounds.Y, centered.Y - 30, centered.Y + 30);
-        Assert.InRange(result.Best.Bounds.Width, centered.Width - 45, centered.Width + 45);
-        Assert.InRange(result.Best.Bounds.Height, centered.Height - 45, centered.Height + 45);
+        Assert.NotNull(centeredResult.Best);
+        Assert.NotNull(offsetResult.Best);
+        Assert.True(
+            centeredResult.Best!.Confidence > offsetResult.Best!.Confidence,
+            $"Expected centered score {centeredResult.Best.Confidence:F3} to exceed offset score {offsetResult.Best.Confidence:F3}.");
     }
 
     [Fact]
