@@ -119,15 +119,17 @@ public sealed class ImageDetector
         using var sourceStrongEdges = new Mat();
         using var sourceSoftEdges = new Mat();
         using var sourceEdges = new Mat();
+        using var sourceFocusMap = new Mat();
         Cv2.CvtColor(source, sourceGray, ColorConversionCodes.BGR2GRAY);
         Cv2.GaussianBlur(sourceGray, sourceBlurred, new Size(3, 3), 0);
         Cv2.Canny(sourceBlurred, sourceStrongEdges, 55, 145);
         Cv2.Canny(sourceBlurred, sourceSoftEdges, 25, 75);
         Cv2.BitwiseOr(sourceStrongEdges, sourceSoftEdges, sourceEdges);
+        FocusRegionDetector.CreateFocusMap(sourceGray, sourceFocusMap);
         var finalCornerRadius = 0;
         if (hasUsableBoundaries)
         {
-            finalBounds = CropRefiner.RefineTopBoundary(sourceEdges, finalBounds, 120);
+            finalBounds = CropRefiner.RefineTopBoundary(sourceEdges, sourceFocusMap, finalBounds, 120);
             finalBounds = CropRefiner.RefineBottomBoundary(sourceEdges, finalBounds, 120);
             finalCornerRadius = CornerRadiusEstimator.EstimateCornerRadius(sourceEdges, finalBounds);
         }
