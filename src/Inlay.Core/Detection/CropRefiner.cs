@@ -160,13 +160,14 @@ internal static class CropRefiner
         var bandHeight = Math.Clamp(lineWidth / 40, 12, 32);
         var originalBottomRow = bounds.Bottom - 1;
         var firstEdgeRow = Math.Max(bandHeight, originalBottomRow - searchRadius);
+        var lastEdgeRow = Math.Min(originalBottomRow, edges.Height - bandHeight - 1);
         var bestEdgeRow = originalBottomRow;
         var bestScore = 0.0;
         var bestTransition = 0.0;
         var bestInsideDensity = 0.0;
         var bestBoundaryStrength = 0.0;
 
-        for (var row = firstEdgeRow; row <= originalBottomRow; row++)
+        for (var row = firstEdgeRow; row <= lastEdgeRow; row++)
         {
             var insideDensity = MeasureEdgeDensity(edges, lineX, row - bandHeight + 1, lineWidth, bandHeight);
             var outsideDensity = MeasureEdgeDensity(edges, lineX, row + 1, lineWidth, bandHeight);
