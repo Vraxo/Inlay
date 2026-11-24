@@ -116,7 +116,7 @@ internal static class CropRefiner
 
         using var focusRegion = new Mat(focusMap, new Rect(lineX, 0, lineWidth, focusMap.Height));
         using var rowAverages = new Mat();
-        Cv2.Reduce(focusRegion, rowAverages, 1, ReduceTypes.Avg, MatType.CV_32F);
+        Cv2.Reduce(focusRegion, rowAverages, ReduceDimension.Column, ReduceTypes.Avg, MatType.CV_32F);
 
         var prefix = new double[focusMap.Height + 1];
         for (var row = 0; row < focusMap.Height; row++)
