@@ -330,4 +330,101 @@ public sealed class ImageDetectorTests
         Assert.InRange(result.Best.Bounds.Width, 510, 570);
         Assert.InRange(result.Best.Bounds.Height, 510, 570);
     }
+
+    [Fact]
+    public void KeepsTheKnownWidePhoneCropGeometry()
+    {
+        const int imageWidth = 1080;
+        const int imageHeight = 2400;
+        var foreground = new Rect(30, 840, 1020, 720);
+
+        using var backdrop = new Mat(imageHeight, imageWidth, MatType.CV_8UC3);
+        Cv2.Randu(backdrop, new Scalar(20, 20, 20), new Scalar(110, 110, 110));
+        using var blurredBackdrop = new Mat();
+        Cv2.GaussianBlur(backdrop, blurredBackdrop, new Size(61, 61), 18);
+        using var image = blurredBackdrop.Clone();
+
+        var random = new Random(149);
+        using (var photo = new Mat(image, foreground))
+        {
+            for (var y = 0; y < foreground.Height; y += 12)
+            {
+                for (var x = 0; x < foreground.Width; x += 12)
+                {
+                    var shade = random.Next(65, 190);
+                    Cv2.Rectangle(photo, new Rect(x, y, 8, 8),
+                        new Scalar(shade, shade, shade), -1);
+                }
+            }
+        }
+
+        var result = new ImageDetector().Detect(image);
+
+        Assert.NotNull(result.Best);
+        Assert.NotEqual(DetectionStatus.Rejected, result.Status);
+        Assert.InRange(result.Best!.Bounds.X, foreground.X - 5, foreground.X + 5);
+        Assert.InRange(result.Best.Bounds.Y, foreground.Y - 8, foreground.Y + 8);
+        Assert.InRange(result.Best.Bounds.Width, foreground.Width - 10, foreground.Width + 10);
+        Assert.InRange(result.Best.Bounds.Height, foreground.Height - 16, foreground.Height + 16);
+        Assert.Equal(0, result.Best.CornerRadius);
+    }
+
+    [Fact]
+    public void DoesNotCropIntoAFullImageAroundItsSharperCentralSubject()
+    {
+        const int imageWidth = 1080;
+        const int imageHeight = 1920;
+        var foreground = new Rect(90, 420, 900, 1080);
+
+        using var backdrop = new Mat(imageHeight, imageWidth, MatType.CV_8UC3);
+        Cv2.Randu(backdrop, new Scalar(10, 10, 10), new Scalar(90, 90, 90));
+        using var blurredBackdrop = new Mat();
+        Cv2.GaussianBlur(backdrop, blurredBackdrop, new Size(61, 61), 18);
+        using var image = blurredBackdrop.Clone();
+
+        var random = new Random(157);
+        using (var photo = new Mat(image, foreground))
+        {
+            // The complete photograph is clearly sharper than its blurred backdrop,
+            // but its broad areas are less detailed than the subject in the middle.
+            for (var y = 0; y < foreground.Height; y += 10)
+            {
+                for (var x = 0; x < foreground.Width; x += 10)
+                {
+                    var shade = random.Next(75, 180);
+                    Cv2.Rectangle(photo, new Rect(x, y, 6, 6),
+                        new Scalar(shade, shade, shade), -1);
+                }
+            }
+
+            // A roughly circular, highly detailed subject deliberately has no
+            // rectangular boundary for the detector to mistake for the photo edge.
+            var centerX = foreground.Width / 2;
+            var centerY = foreground.Height / 2;
+            const int radius = 245;
+            for (var y = centerY - radius; y <= centerY + radius; y += 3)
+            {
+                for (var x = centerX - radius; x <= centerX + radius; x += 3)
+                {
+                    var dx = x - centerX;
+                    var dy = y - centerY;
+                    if (dx * dx + dy * dy > radius * radius)
+                        continue;
+
+                    var shade = random.Next(0, 256);
+                    Cv2.Rectangle(photo, new Rect(x, y, 2, 2),
+                        new Scalar(shade, shade, shade), -1);
+                }
+            }
+        }
+
+        var result = new ImageDetector().Detect(image);
+
+        Assert.NotNull(result.Best);
+        Assert.NotEqual(DetectionStatus.Rejected, result.Status);
+        Assert.InRange(result.Best!.Bounds.X, foreground.X - 25, foreground.X + 25);
+        Assert.InRange(result.Best.Bounds.Y, foreground.Y - 25, foreground.Y + 25);
+        Assert.InRange(result.Best.Bounds.Right, foreground.Right - 25, foreground.Right + 25);
+        Assert.InRange(result.Best.Bounds.Bottom, foreground.Bottom - 25, foreground.Bottom + 25);
+    }
 }
