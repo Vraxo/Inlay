@@ -1514,23 +1514,15 @@ html[data-theme="dark"] .crop-zoom-presets button[aria-pressed="true"] {
 }
 
 
-/* Pixel boundaries become visible only at close zoom. */
-.pixel-grid {
+.pixel-grid-overlay {
     position: absolute;
     inset: 0;
-    z-index: 1;
+    z-index: 3;
+    display: block;
+    width: 100%;
+    height: 100%;
     pointer-events: none;
-    opacity: 0;
-    background-image: linear-gradient(to right, rgba(20, 20, 20, .72) 0, rgba(20, 20, 20, .72) var(--pixel-grid-line-x, .1px), transparent var(--pixel-grid-line-x, .1px)), linear-gradient(to bottom, rgba(20, 20, 20, .72) 0, rgba(20, 20, 20, .72) var(--pixel-grid-line-y, .1px), transparent var(--pixel-grid-line-y, .1px));
-    background-repeat: repeat;
-    transition: opacity .12s ease;
-}
-.crop-stage.show-pixel-grid .pixel-grid {
-    opacity: .85;
 }
 .crop-selection {
     z-index: 2;
-}
-html[data-theme="dark"] .pixel-grid {
-    background-image: linear-gradient(to right, rgba(255, 255, 255, .85) 0, rgba(255, 255, 255, .85) var(--pixel-grid-line-x, .1px), transparent var(--pixel-grid-line-x, .1px)), linear-gradient(to bottom, rgba(255, 255, 255, .85) 0, rgba(255, 255, 255, .85) var(--pixel-grid-line-y, .1px), transparent var(--pixel-grid-line-y, .1px));
 }
