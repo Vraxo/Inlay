@@ -123,6 +123,7 @@
                         <div class="crop-viewport">
                             <div class="crop-stage" @ref="cropStage">
                                 <img @ref="sourceImageElement" src="@activeImage.SourcePreview" alt="Original screenshot with draggable crop selection" draggable="false" />
+                                <div class="pixel-grid" aria-hidden="true"></div>
                                 <div class="crop-selection" @ref="cropSelection" role="group" aria-label="Crop selection. Drag to move; use the handles to resize." tabindex="0">
                                 <button type="button" class="crop-handle handle-n" data-handle="n" aria-label="Resize from top edge"></button>
                                 <button type="button" class="crop-handle handle-e" data-handle="e" aria-label="Resize from right edge"></button>
