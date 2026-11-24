@@ -578,4 +578,27 @@ public sealed class ImageDetectorTests
         Assert.InRange(result.Best.Bounds.Bottom, foreground.Bottom - 20, foreground.Bottom + 20);
     }
 
+    [Fact]
+    public void RefinesTopBoundarySeventyPixelsAboveTheInitialCropUsingFocusTransition()
+    {
+        const int imageWidth = 1080;
+        const int imageHeight = 2400;
+        var initialBounds = new Rect(33, 660, 1014, 1007);
+        var expectedTop = 730;
+
+        using var edges = new Mat(imageHeight, imageWidth, MatType.CV_8UC1, Scalar.Black);
+        using var focusMap = new Mat(imageHeight, imageWidth, MatType.CV_8UC1, new Scalar(3));
+        Cv2.Rectangle(focusMap, new Rect(33, expectedTop, 1014, 940), new Scalar(42), -1);
+        Cv2.Rectangle(focusMap, new Rect(360, 900, 375, 600), new Scalar(58), -1);
+        Cv2.Line(edges, new Point(130, expectedTop - 1), new Point(950, expectedTop - 1),
+            Scalar.White, 2);
+
+        var refined = CropRefiner.RefineTopBoundary(edges, focusMap, initialBounds, 120);
+
+        Assert.InRange(refined.Y, expectedTop - 1, expectedTop + 1);
+        Assert.Equal(initialBounds.Bottom, refined.Bottom);
+        Assert.Equal(initialBounds.X, refined.X);
+        Assert.Equal(initialBounds.Width, refined.Width);
+    }
+
 }
