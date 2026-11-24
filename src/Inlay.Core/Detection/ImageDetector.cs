@@ -93,10 +93,10 @@ public sealed class ImageDetector
             .Where(candidate =>
                 ranked[0].Result.AreaRatio < 0.15 &&
                 candidate.Result.AreaRatio >= Math.Max(0.25, ranked[0].Result.AreaRatio * 2.0) &&
-                candidate.Result.Bounds.Width >= analysis.Width * 0.90 &&
+                candidate.Result.Bounds.Width >= source.Width * 0.90 &&
                 highestConfidence - candidate.Result.Confidence < 0.16 &&
                 CandidateScorer.MeasureCenterPreference(
-                    candidate.Result.Bounds, analysis.Width, analysis.Height) >= 0.75)
+                    candidate.Result.Bounds, source.Width, source.Height) >= 0.75)
             .OrderByDescending(candidate => candidate.Result.AreaRatio)
             .FirstOrDefault();
 
