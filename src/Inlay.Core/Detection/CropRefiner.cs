@@ -107,32 +107,44 @@ internal static class CropRefiner
         if (lineWidth < 20 || bounds.Height < 20)
             return bounds;
 
-        // Canny locates the transition on the final background row. The crop
-        // begins on the following row, so convert edge rows to pixel bounds.
-        var firstEdgeRow = Math.Max(0, bounds.Y - searchRadius - 1);
-        var lastEdgeRow = Math.Min(edges.Height - 1, bounds.Y + searchRadius - 1);
+        var bandHeight = Math.Clamp(lineWidth / 40, 12, 32);
+        var firstEdgeRow = Math.Max(bandHeight, bounds.Y - searchRadius - 1);
+        var lastEdgeRow = Math.Min(edges.Height - bandHeight - 2, bounds.Y + searchRadius - 1);
         var bestEdgeRow = bounds.Y - 1;
-        var bestStrength = bestEdgeRow >= 0
-            ? DetectionGeometry.CountEdges(edges, new Rect(lineX, bestEdgeRow, lineWidth, 1)) / (double)lineWidth
-            : 0;
+        var bestScore = 0.0;
+        var bestTransition = 0.0;
+        var bestInsideDensity = 0.0;
+        var bestBoundaryStrength = 0.0;
 
         for (var row = firstEdgeRow; row <= lastEdgeRow; row++)
         {
-            var strength = DetectionGeometry.CountEdges(edges, new Rect(lineX, row, lineWidth, 1)) /
-                           (double)lineWidth;
-            if (strength > bestStrength)
-            {
-                bestEdgeRow = row;
-                bestStrength = strength;
-            }
+            var outsideDensity = MeasureEdgeDensity(edges, lineX, row - bandHeight, lineWidth, bandHeight);
+            var insideDensity = MeasureEdgeDensity(edges, lineX, row + 1, lineWidth, bandHeight);
+            var transition = (insideDensity - outsideDensity) /
+                             Math.Max(0.02, insideDensity + outsideDensity);
+            var boundaryStrength = DetectionGeometry.CountEdges(edges, new Rect(lineX, row, lineWidth, 1)) /
+                                   (double)lineWidth;
+            var score = transition * 0.8 + Math.Min(boundaryStrength / 0.12, 1.0) * 0.2;
+
+            if (score <= bestScore)
+                continue;
+
+            bestEdgeRow = row;
+            bestScore = score;
+            bestTransition = transition;
+            bestInsideDensity = insideDensity;
+            bestBoundaryStrength = boundaryStrength;
         }
 
-        // If the strongest edge lies below the original candidate top,
-        // it marks the first foreground row. If it lies at/above that top,
-        // it marks the final background row and the crop starts one row later.
-        var refinedY = bestEdgeRow > bounds.Y ? bestEdgeRow : bestEdgeRow + 1;
+        // A real image boundary separates a low-detail blurred backdrop from
+        // a sharper region. Internal details may have stronger individual
+        // edge rows, but they do not create the same sustained density change.
+        if (bestTransition < 0.12 || bestInsideDensity < 0.02 || bestBoundaryStrength < 0.015)
+            return RefineTopBoundaryNearOriginal(edges, bounds, searchRadius, lineX, lineWidth);
+
+        var refinedY = bestEdgeRow + 1;
         var refinedHeight = bounds.Bottom - refinedY;
-        return bestStrength >= 0.05 && refinedY != bounds.Y && refinedHeight > 0
+        return refinedY != bounds.Y && refinedHeight > 0
             ? new Rect(bounds.X, refinedY, bounds.Width, refinedHeight)
             : bounds;
     }
@@ -145,39 +157,121 @@ internal static class CropRefiner
         if (lineWidth < 20 || bounds.Height < 20)
             return bounds;
 
-        // The reported crop extends too far downward. Search only above its
-        // current bottom so this pass can reduce height, never increase it.
+        var bandHeight = Math.Clamp(lineWidth / 40, 12, 32);
         var originalBottomRow = bounds.Bottom - 1;
-        var firstEdgeRow = Math.Max(0, originalBottomRow - searchRadius);
+        var firstEdgeRow = Math.Max(bandHeight, originalBottomRow - searchRadius);
         var bestEdgeRow = originalBottomRow;
-        var originalStrength = DetectionGeometry.CountEdges(edges, new Rect(lineX, originalBottomRow, lineWidth, 1)) /
-                               (double)lineWidth;
-        var bestStrength = originalStrength;
+        var bestScore = 0.0;
+        var bestTransition = 0.0;
+        var bestInsideDensity = 0.0;
+        var bestBoundaryStrength = 0.0;
 
-        for (var row = firstEdgeRow; row < originalBottomRow; row++)
+        for (var row = firstEdgeRow; row <= originalBottomRow; row++)
+        {
+            var insideDensity = MeasureEdgeDensity(edges, lineX, row - bandHeight + 1, lineWidth, bandHeight);
+            var outsideDensity = MeasureEdgeDensity(edges, lineX, row + 1, lineWidth, bandHeight);
+            var transition = (insideDensity - outsideDensity) /
+                             Math.Max(0.02, insideDensity + outsideDensity);
+            var boundaryStrength = DetectionGeometry.CountEdges(edges, new Rect(lineX, row, lineWidth, 1)) /
+                                   (double)lineWidth;
+            var score = transition * 0.8 + Math.Min(boundaryStrength / 0.12, 1.0) * 0.2;
+
+            if (score <= bestScore)
+                continue;
+
+            bestEdgeRow = row;
+            bestScore = score;
+            bestTransition = transition;
+            bestInsideDensity = insideDensity;
+            bestBoundaryStrength = boundaryStrength;
+        }
+
+        if (bestEdgeRow == originalBottomRow || bestTransition < 0.12 ||
+            bestInsideDensity < 0.02 || bestBoundaryStrength < 0.015)
+            return RefineBottomBoundaryNearOriginal(edges, bounds, searchRadius, lineX, lineWidth);
+
+        var bottomExclusive = bestEdgeRow + 1;
+        if (bottomExclusive <= bounds.Y || bottomExclusive >= bounds.Bottom)
+            return bounds;
+
+        return new Rect(bounds.X, bounds.Y, bounds.Width, bottomExclusive - bounds.Y);
+    }
+
+    private static Rect RefineTopBoundaryNearOriginal(
+        Mat edges, Rect bounds, int searchRadius, int lineX, int lineWidth)
+    {
+        var radius = Math.Min(searchRadius, 24);
+        var firstRow = Math.Max(0, bounds.Y - radius - 1);
+        var lastRow = Math.Min(edges.Height - 1, bounds.Y + radius - 1);
+        var bestRow = bounds.Y - 1;
+        var bestStrength = bestRow >= 0
+            ? DetectionGeometry.CountEdges(edges, new Rect(lineX, bestRow, lineWidth, 1)) / (double)lineWidth
+            : 0;
+
+        for (var row = firstRow; row <= lastRow; row++)
         {
             var strength = DetectionGeometry.CountEdges(edges, new Rect(lineX, row, lineWidth, 1)) /
                            (double)lineWidth;
             if (strength > bestStrength)
             {
-                bestEdgeRow = row;
+                bestRow = row;
                 bestStrength = strength;
             }
         }
 
-        var meaningfulImprovement = bestEdgeRow < originalBottomRow &&
+        var refinedY = bestRow > bounds.Y ? bestRow : bestRow + 1;
+        var refinedHeight = bounds.Bottom - refinedY;
+        return bestStrength >= 0.05 && refinedY != bounds.Y && refinedHeight > 0
+            ? new Rect(bounds.X, refinedY, bounds.Width, refinedHeight)
+            : bounds;
+    }
+
+    private static Rect RefineBottomBoundaryNearOriginal(
+        Mat edges, Rect bounds, int searchRadius, int lineX, int lineWidth)
+    {
+        var originalBottomRow = bounds.Bottom - 1;
+        var firstRow = Math.Max(0, originalBottomRow - Math.Min(searchRadius, 24));
+        var bestRow = originalBottomRow;
+        var originalStrength = DetectionGeometry.CountEdges(edges, new Rect(lineX, originalBottomRow, lineWidth, 1)) /
+                               (double)lineWidth;
+        var bestStrength = originalStrength;
+
+        for (var row = firstRow; row < originalBottomRow; row++)
+        {
+            var strength = DetectionGeometry.CountEdges(edges, new Rect(lineX, row, lineWidth, 1)) /
+                           (double)lineWidth;
+            if (strength > bestStrength)
+            {
+                bestRow = row;
+                bestStrength = strength;
+            }
+        }
+
+        var meaningfulImprovement = bestRow < originalBottomRow &&
                                     bestStrength - originalStrength >= 0.04 &&
                                     bestStrength >= originalStrength * 1.25 &&
                                     bestStrength >= 0.05;
         if (!meaningfulImprovement)
             return bounds;
 
-        // The selected edge row is the final foreground row, so the bottom
-        // coordinate is exclusive and sits one pixel after that edge.
-        var bottomExclusive = bestEdgeRow + 1;
-        if (bottomExclusive <= bounds.Y || bottomExclusive >= bounds.Bottom)
-            return bounds;
+        var bottomExclusive = bestRow + 1;
+        return bottomExclusive > bounds.Y && bottomExclusive < bounds.Bottom
+            ? new Rect(bounds.X, bounds.Y, bounds.Width, bottomExclusive - bounds.Y)
+            : bounds;
+    }
 
-        return new Rect(bounds.X, bounds.Y, bounds.Width, bottomExclusive - bounds.Y);
+    private static double MeasureEdgeDensity(Mat edges, int x, int y, int width, int height)
+    {
+        var count = 0;
+        for (var row = y; row < y + height; row++)
+        {
+            for (var column = x; column < x + width; column++)
+            {
+                if (edges.At<byte>(row, column) != 0)
+                    count++;
+            }
+        }
+
+        return count / (double)(width * height);
     }
 }
