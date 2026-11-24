@@ -114,25 +114,33 @@
             </div>
 
             <div class="results">
-                <div class="panel">
-                    <div class="panel-heading">
-                        <span>01 / Select crop</span>
-                        <span class="file-name">@activeImage.FileName</span>
+                <div class="panel crop-viewer-panel">
+                    <div class="panel-heading crop-viewer-heading">
+                        <span>01 / Crop workspace</span>
+                        <span class="status @StatusClass">@GetStatusLabel(activeImage)</span>
+                    </div>
+                    <div class="viewer-mode-row">
+                        <div class="viewer-modes" role="group" aria-label="Image view">
+                            <button type="button" data-view-mode="original" aria-pressed="true">Original</button>
+                            <button type="button" data-view-mode="crop" aria-pressed="false">Cropped result</button>
+                        </div>
+                        <span class="file-name" title="@activeImage.FileName">@activeImage.FileName</span>
                     </div>
                     <div class="image-frame crop-edit-frame">
                         <div class="crop-viewport">
                             <div class="crop-stage" @ref="cropStage">
                                 <img @ref="sourceImageElement" src="@activeImage.SourcePreview" alt="Original screenshot with draggable crop selection" draggable="false" />
+                                <canvas @ref="cropPreviewCanvas" class="crop-preview-canvas" aria-label="Cropped result preview"></canvas>
                                 <div class="pixel-grid" aria-hidden="true"></div>
                                 <div class="crop-selection" @ref="cropSelection" role="group" aria-label="Crop selection. Drag to move; use the handles to resize." tabindex="0">
-                                <button type="button" class="crop-handle handle-n" data-handle="n" aria-label="Resize from top edge"></button>
-                                <button type="button" class="crop-handle handle-e" data-handle="e" aria-label="Resize from right edge"></button>
-                                <button type="button" class="crop-handle handle-s" data-handle="s" aria-label="Resize from bottom edge"></button>
-                                <button type="button" class="crop-handle handle-w" data-handle="w" aria-label="Resize from left edge"></button>
-                                <button type="button" class="crop-handle handle-nw" data-handle="nw" aria-label="Resize from top-left corner"></button>
-                                <button type="button" class="crop-handle handle-ne" data-handle="ne" aria-label="Resize from top-right corner"></button>
-                                <button type="button" class="crop-handle handle-sw" data-handle="sw" aria-label="Resize from bottom-left corner"></button>
-                                <button type="button" class="crop-handle handle-se" data-handle="se" aria-label="Resize from bottom-right corner"></button>
+                                    <button type="button" class="crop-handle handle-n" data-handle="n" aria-label="Resize from top edge"></button>
+                                    <button type="button" class="crop-handle handle-e" data-handle="e" aria-label="Resize from right edge"></button>
+                                    <button type="button" class="crop-handle handle-s" data-handle="s" aria-label="Resize from bottom edge"></button>
+                                    <button type="button" class="crop-handle handle-w" data-handle="w" aria-label="Resize from left edge"></button>
+                                    <button type="button" class="crop-handle handle-nw" data-handle="nw" aria-label="Resize from top-left corner"></button>
+                                    <button type="button" class="crop-handle handle-ne" data-handle="ne" aria-label="Resize from top-right corner"></button>
+                                    <button type="button" class="crop-handle handle-sw" data-handle="sw" aria-label="Resize from bottom-left corner"></button>
+                                    <button type="button" class="crop-handle handle-se" data-handle="se" aria-label="Resize from bottom-right corner"></button>
                                 </div>
                             </div>
                         </div>
@@ -147,22 +155,8 @@
                         </div>
                     </div>
                     <div class="image-meta crop-meta">
-                        <span>@sourceWidth × @sourceHeight px original</span>
-                        <span>Drag the box to move it</span>
-                    </div>
-                </div>
-
-                <div class="panel">
-                    <div class="panel-heading">
-                        <span>02 / Live crop preview</span>
-                        <span class="status @StatusClass">@GetStatusLabel(activeImage)</span>
-                    </div>
-                    <div class="image-frame crop-frame">
-                        <canvas @ref="cropPreviewCanvas" class="crop-preview-canvas" aria-label="Live crop preview"></canvas>
-                    </div>
-                    <div class="image-meta crop-meta">
                         <span @ref="cropReadout">X @cropX · Y @cropY · @cropWidth × @cropHeight px</span>
-                        <span>Transparent corners</span>
+                        <span>Drag the selection in Original view · Grid at 2:1 zoom and above</span>
                     </div>
                 </div>
             </div>
