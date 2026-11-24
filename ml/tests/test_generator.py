@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from generate_synthetic import make_sample
+from ml.generate_synthetic import make_sample
 
 
 class SyntheticGeneratorTests(unittest.TestCase):
