@@ -84,7 +84,8 @@ def make_sample(asset_paths: list[Path], rng: random.Random) -> tuple[Image.Imag
         shadow.putalpha(shadow_mask.filter(ImageFilter.GaussianBlur(12)))
         screenshot.alpha_composite(shadow, (target_x - 18, target_y - 18))
 
-    screenshot.alpha_composite(target, (target_x, target_y), alpha)
+    target.putalpha(alpha)
+    screenshot.alpha_composite(target, (target_x, target_y))
     mask.paste(alpha, (target_x, target_y))
     draw = ImageDraw.Draw(screenshot)
     random_ui(draw, rng, width, height)
