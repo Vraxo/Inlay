@@ -73,6 +73,11 @@ public sealed class ImageDetector
             AddCandidate(candidates, edges, gray, focusMap, bounds, 0, true, scale,
                 analysis.Width, analysis.Height, ref rejectedByAreaRatio);
 
+        var rectangleCandidates = CenteredRectangleDetector.FindCandidates(focusMap, edges);
+        foreach (var bounds in rectangleCandidates)
+            AddCandidate(candidates, edges, gray, focusMap, bounds, 0, true, scale,
+                analysis.Width, analysis.Height, ref rejectedByAreaRatio);
+
         var ranked = candidates.OrderByDescending(candidate => candidate.Result.Confidence).ToArray();
         if (ranked.Length == 0)
         {
