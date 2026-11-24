@@ -5,6 +5,7 @@ namespace Inlay.Detection;
 public sealed class ImageDetector
 {
     private const int MaximumAnalysisDimension = 1600;
+    private const int SquareCornerHorizontalInset = 3;
 
     public DetectionResult Detect(Mat source)
     {
@@ -113,6 +114,18 @@ public sealed class ImageDetector
             finalBounds = CropRefiner.RefineTopBoundary(sourceEdges, finalBounds, 24);
             finalBounds = CropRefiner.RefineBottomBoundary(sourceEdges, finalBounds, 24);
             finalCornerRadius = CornerRadiusEstimator.EstimateCornerRadius(sourceEdges, finalBounds);
+        }
+
+        // Square-cornered screenshots can retain a thin antialiased halo
+        // outside the visible image edge. Remove the small horizontal fringe
+        // only when all four corners were classified as square.
+        if (finalCornerRadius == 0 && hasUsableBoundaries && finalBounds.Width > SquareCornerHorizontalInset * 2)
+        {
+            finalBounds = new Rect(
+                finalBounds.X + SquareCornerHorizontalInset,
+                finalBounds.Y,
+                finalBounds.Width - SquareCornerHorizontalInset * 2,
+                finalBounds.Height);
         }
 
         var finalCornerFit = finalCornerRadius > 0 ? 0.85 : 0.65;
