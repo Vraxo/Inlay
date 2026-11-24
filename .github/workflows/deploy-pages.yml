@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - "src/Inlay.Web/**"
+      - "src/Inlay.Core/**"
       - "src/Inlay/Detection/**"
       - "src/Inlay/Extraction/**"
       - ".github/workflows/deploy-pages.yml"
