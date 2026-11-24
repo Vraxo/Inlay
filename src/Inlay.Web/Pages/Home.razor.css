@@ -140,7 +140,7 @@ h1 span {
 }
 .results {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 16px;
     margin-top: 22px;
 }
@@ -163,6 +163,51 @@ h1 span {
     letter-spacing: .5px;
     text-transform: uppercase;
 }
+
+.crop-viewer-heading {
+    height: 45px;
+}
+.viewer-mode-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 48px;
+    padding: 7px 13px;
+    border-top: 1px solid #ededed;
+    background: #fff;
+}
+.viewer-modes {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px;
+    border-radius: 8px;
+    background: #f0f0f0;
+}
+.viewer-modes button {
+    padding: 7px 11px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #666;
+    font-size: 11px;
+    font-weight: 650;
+    cursor: pointer;
+}
+.viewer-modes button[aria-pressed="true"] {
+    background: #fff;
+    color: #9b286b;
+    box-shadow: 0 1px 3px rgba(0,0,0,.12);
+}
+.viewer-modes button:focus-visible {
+    outline: 2px solid rgba(193, 53, 132, .45);
+    outline-offset: 2px;
+}
+.viewer-mode-row .file-name {
+    text-align: right;
+}
+
 .file-name {
     max-width: 55%;
     overflow: hidden;
@@ -911,7 +956,10 @@ footer {
     min-height: 250px;
     overflow: hidden;
     touch-action: none;
-    background: #f0f0f0;
+    background-color: #e8e8e8;
+    background-image: linear-gradient(45deg,#fff 25%,transparent 25%),linear-gradient(-45deg,#fff 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#fff 75%),linear-gradient(-45deg,transparent 75%,#fff 75%);
+    background-size: 18px 18px;
+    background-position: 0 0,0 9px,9px -9px,-9px 0;
     cursor: default;
 }
 .crop-stage {
@@ -933,6 +981,20 @@ footer {
     height: auto;
     object-fit: contain;
     pointer-events: none;
+}
+.crop-stage > .crop-preview-canvas {
+    display: none;
+    max-width: 100%;
+    max-height: min(480px, 62vh);
+    width: auto;
+    height: auto;
+}
+.crop-stage.show-crop-result > img,
+.crop-stage.show-crop-result > .crop-selection {
+    display: none;
+}
+.crop-stage.show-crop-result > .crop-preview-canvas {
+    display: block;
 }
 .crop-viewport.pan-ready { cursor: grab; }
 .crop-viewport.is-panning { cursor: grabbing; }
@@ -1028,17 +1090,7 @@ footer {
 .handle-ne { top: -7px; right: -7px; cursor: nesw-resize; }
 .handle-sw { bottom: -7px; left: -7px; cursor: nesw-resize; }
 .handle-se { bottom: -7px; right: -7px; cursor: nwse-resize; }
-.crop-frame {
-    min-height: 250px;
-    padding: 12px;
-}
-.crop-preview-canvas {
-    display: block;
-    max-width: 100%;
-    max-height: 430px;
-    width: auto;
-    height: auto;
-}
+
 .crop-meta {
     display: flex;
     align-items: center;
@@ -1124,9 +1176,17 @@ html[data-theme="dark"] .crop-handle {
     box-shadow: 0 1px 5px rgba(0,0,0,.7);
 }
 @media (max-width: 700px) {
-    .crop-edit-frame, .crop-frame {
+    .crop-edit-frame {
         min-height: 180px;
         padding: 8px;
+    }
+    .viewer-mode-row {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+    .viewer-mode-row .file-name {
+        max-width: 100%;
+        text-align: left;
     }
     .crop-meta {
         align-items: flex-start;
@@ -1423,7 +1483,25 @@ html[data-theme="dark"] .status.processing {
 }
 
 
-html[data-theme="dark"] .crop-viewport { background: #181818; }
+html[data-theme="dark"] .crop-viewport {
+    background-color: #25232a;
+    background-image: linear-gradient(45deg,#34313a 25%,transparent 25%),linear-gradient(-45deg,#34313a 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#34313a 75%),linear-gradient(-45deg,transparent 75%,#34313a 75%);
+}
+html[data-theme="dark"] .viewer-mode-row {
+    border-top-color: #37333d;
+    background: #211f26;
+}
+html[data-theme="dark"] .viewer-modes {
+    background: #302d36;
+}
+html[data-theme="dark"] .viewer-modes button {
+    color: #c5c1cb;
+}
+html[data-theme="dark"] .viewer-modes button[aria-pressed="true"] {
+    background: #45404b;
+    color: #ffadd2;
+    box-shadow: 0 1px 3px rgba(0,0,0,.35);
+}
 html[data-theme="dark"] .crop-zoom-presets button {
     border-color: #414141;
     background: #292929;
