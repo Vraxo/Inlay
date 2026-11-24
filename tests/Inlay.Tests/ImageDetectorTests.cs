@@ -445,4 +445,70 @@ public sealed class ImageDetectorTests
         Assert.InRange(result.Best.Bounds.Right, foreground.Right - 25, foreground.Right + 25);
         Assert.InRange(result.Best.Bounds.Bottom, foreground.Bottom - 25, foreground.Bottom + 25);
     }
+
+    [Fact]
+    public void PrefersTheCompleteImageOverASharperRectangularRegionInsideIt()
+    {
+        const int imageWidth = 1080;
+        const int imageHeight = 2400;
+        var foreground = new Rect(29, 729, 1022, 942);
+        var detailedRegion = new Rect(360, 900, 375, 600);
+
+        using var background = new Mat(imageHeight, imageWidth, MatType.CV_8UC3, new Scalar(18, 23, 25));
+        var random = new Random(163);
+        for (var index = 0; index < 100; index++)
+        {
+            var x = random.Next(0, imageWidth - 90);
+            var y = random.Next(0, imageHeight - 90);
+            var width = random.Next(24, 180);
+            var height = random.Next(12, 100);
+            var color = new Scalar(random.Next(15, 100), random.Next(15, 100), random.Next(15, 100));
+            Cv2.Rectangle(background, new Rect(x, y, width, height), color, -1);
+        }
+
+        using var blurredBackground = new Mat();
+        Cv2.GaussianBlur(background, blurredBackground, new Size(61, 61), 18);
+        using var image = blurredBackground.Clone();
+
+        using (var photo = new Mat(image, foreground))
+        {
+            // The complete image has visible texture throughout, even in its
+            // lower-detail areas. It is not a blurred extension of the backdrop.
+            for (var y = 0; y < foreground.Height; y += 24)
+            {
+                for (var x = 0; x < foreground.Width; x += 24)
+                {
+                    var shade = random.Next(55, 205);
+                    Cv2.Rectangle(photo, new Rect(x, y, 16, 16),
+                        new Scalar(shade, shade, shade), -1);
+                }
+            }
+
+            // This sharp, rectangular region is an object within the image,
+            // not the boundary of the photograph.
+            var inner = new Rect(
+                detailedRegion.X - foreground.X,
+                detailedRegion.Y - foreground.Y,
+                detailedRegion.Width,
+                detailedRegion.Height);
+            for (var y = inner.Y; y < inner.Bottom; y += 5)
+            {
+                for (var x = inner.X; x < inner.Right; x += 5)
+                {
+                    var shade = random.Next(0, 256);
+                    Cv2.Rectangle(photo, new Rect(x, y, 3, 3),
+                        new Scalar(shade, shade, shade), -1);
+                }
+            }
+        }
+
+        var result = new ImageDetector().Detect(image);
+
+        Assert.NotNull(result.Best);
+        Assert.NotEqual(DetectionStatus.Rejected, result.Status);
+        Assert.InRange(result.Best!.Bounds.X, foreground.X - 25, foreground.X + 25);
+        Assert.InRange(result.Best.Bounds.Y, foreground.Y - 25, foreground.Y + 25);
+        Assert.InRange(result.Best.Bounds.Right, foreground.Right - 25, foreground.Right + 25);
+        Assert.InRange(result.Best.Bounds.Bottom, foreground.Bottom - 25, foreground.Bottom + 25);
+    }
 }
