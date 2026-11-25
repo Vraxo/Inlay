@@ -309,10 +309,6 @@
                 const sourcePixelWidth = bounds.width / view.width;
                 const sourcePixelHeight = bounds.height / view.height;
 
-                // At smaller sizes a full grid becomes visual noise rather than a useful pixel guide.
-                if (sourcePixelWidth < 3 || sourcePixelHeight < 3)
-                    return;
-
                 let left = bounds.left - viewportBounds.left;
                 let top = bounds.top - viewportBounds.top;
                 let width = bounds.width;
@@ -332,51 +328,101 @@
                     return;
 
                 const scale = dpr;
-                context.save();
-                context.beginPath();
-
-                const radius = editor.viewMode === "crop"
-                    ? editor.radius * Math.min(sourcePixelWidth, sourcePixelHeight)
-                    : 0;
                 const x = left * scale;
                 const y = top * scale;
                 const w = width * scale;
                 const h = height * scale;
-                const r = Math.max(0, Math.min(radius * scale, w / 2, h / 2));
-
-                if (r > 0)
-                    context.roundRect(x, y, w, h, r);
-                else
-                    context.rect(x, y, w, h);
-                context.clip();
-
+                const radius = editor.viewMode === "crop"
+                    ? editor.radius * Math.min(sourcePixelWidth, sourcePixelHeight)
+                    : 0;
                 const dark = document.documentElement.dataset.theme === "dark";
-                context.strokeStyle = dark ? "rgba(255,255,255,.48)" : "rgba(25,25,25,.42)";
-                context.lineWidth = 1;
+
+                // Grid lines are tied to source-pixel boundaries, not a scaled CSS texture.
+                if (sourcePixelWidth >= 3 && sourcePixelHeight >= 3) {
+                    context.save();
+                    context.beginPath();
+                    if (radius > 0)
+                        context.roundRect(x, y, w, h, radius * scale);
+                    else
+                        context.rect(x, y, w, h);
+                    context.clip();
+
+                    const gridLineWidth = Math.max(1, dpr);
+                    const gridOffset = gridLineWidth / 2;
+                    const snapGridLine = value =>
+                        Math.round(value * scale - gridOffset) + gridOffset;
+
+                    context.strokeStyle = dark
+                        ? "rgba(255,255,255,.48)"
+                        : "rgba(25,25,25,.42)";
+                    context.lineWidth = gridLineWidth;
+                    context.beginPath();
+
+                    const firstColumn = Math.max(1, Math.ceil(-left / sourcePixelWidth));
+                    const lastColumn = Math.min(
+                        editor.width - 1,
+                        Math.floor((viewportBounds.width - left) / sourcePixelWidth));
+                    for (let column = firstColumn; column <= lastColumn; column++) {
+                        const lineX = snapGridLine(left + column * sourcePixelWidth);
+                        context.moveTo(lineX, Math.max(0, y));
+                        context.lineTo(lineX, Math.min(pixelHeight, bottom * scale));
+                    }
+
+                    const firstRow = Math.max(1, Math.ceil(-top / sourcePixelHeight));
+                    const lastRow = Math.min(
+                        editor.height - 1,
+                        Math.floor((viewportBounds.height - top) / sourcePixelHeight));
+                    for (let row = firstRow; row <= lastRow; row++) {
+                        const lineY = snapGridLine(top + row * sourcePixelHeight);
+                        context.moveTo(Math.max(0, x), lineY);
+                        context.lineTo(Math.min(pixelWidth, right * scale), lineY);
+                    }
+
+                    context.stroke();
+                    context.restore();
+                }
+
+                // The crop boundary is a one-CSS-pixel line, regardless of image zoom.
+                const edgeWidth = Math.max(1, dpr);
+                const edgeOffset = edgeWidth / 2;
+                const snapEdge = value =>
+                    Math.round(value * scale - edgeOffset) + edgeOffset;
+                const edgeLeft = snapEdge(left);
+                const edgeTop = snapEdge(top);
+                const edgeRight = snapEdge(right);
+                const edgeBottom = snapEdge(bottom);
+
+                context.save();
+                context.strokeStyle = dark ? "#ff9acb" : "#a82c70";
+                context.lineWidth = edgeWidth;
                 context.beginPath();
-
-                const startX = Math.max(1, Math.ceil(-left / sourcePixelWidth));
-                const endX = Math.min(view.width - 1, Math.floor((viewportBounds.width - left) / sourcePixelWidth));
-                for (let column = startX; column <= endX; column++) {
-                    const lineX = Math.round((left + column * sourcePixelWidth) * scale) + .5;
-                    context.moveTo(lineX, Math.max(0, top * scale));
-                    context.lineTo(lineX, Math.min(pixelHeight, bottom * scale));
-                }
-
-                const startY = Math.max(1, Math.ceil(-top / sourcePixelHeight));
-                const endY = Math.min(view.height - 1, Math.floor((viewportBounds.height - top) / sourcePixelHeight));
-                for (let row = startY; row <= endY; row++) {
-                    const lineY = Math.round((top + row * sourcePixelHeight) * scale) + .5;
-                    context.moveTo(Math.max(0, left * scale), lineY);
-                    context.lineTo(Math.min(pixelWidth, right * scale), lineY);
-                }
-
+                const edgeRadius = Math.min(
+                    radius * scale,
+                    (edgeRight - edgeLeft) / 2,
+                    (edgeBottom - edgeTop) / 2);
+                if (edgeRadius > 0)
+                    context.roundRect(
+                        edgeLeft,
+                        edgeTop,
+                        edgeRight - edgeLeft,
+                        edgeBottom - edgeTop,
+                        edgeRadius);
+                else
+                    context.rect(
+                        edgeLeft,
+                        edgeTop,
+                        edgeRight - edgeLeft,
+                        edgeBottom - edgeTop);
                 context.stroke();
                 context.restore();
             };
 
             editor.updateTransform = () => {
                 stage.style.transform = `translate3d(${editor.panX}px, ${editor.panY}px, 0) scale(${editor.zoomFactor})`;
+                const sourceZoom = editor.zoomFactor * editor.fitScale;
+                const inverseZoom = sourceZoom > 0 ? 1 / sourceZoom : 1;
+                stage.style.setProperty("--inverse-source-zoom", String(inverseZoom));
+                stage.classList.toggle("pixel-inspection-mode", sourceZoom >= 3);
                 editor.drawPixelGrid();
             };
 
