@@ -1040,18 +1040,36 @@ footer {
     outline-offset: 2px;
 }
 .crop-selection {
-    --handle-zoom: min(1, var(--inverse-source-zoom, 1));
+    --handle-zoom: min(1, var(--inverse-stage-zoom, 1));
     position: absolute;
     border: 0;
-    box-shadow: 0 0 0 calc(9999px * var(--inverse-source-zoom, 1)) rgba(0,0,0,.46);
+    box-shadow: 0 0 0 calc(9999px * var(--inverse-stage-zoom, 1)) rgba(0,0,0,.46);
     cursor: move;
     touch-action: none;
     outline: none;
 }
 .crop-selection:focus-visible {
-    outline: calc(2px * var(--inverse-source-zoom, 1)) solid #f77737;
-    outline-offset: calc(3px * var(--inverse-source-zoom, 1));
+    outline: calc(2px * var(--inverse-stage-zoom, 1)) solid #f77737;
+    outline-offset: calc(3px * var(--inverse-stage-zoom, 1));
 }
+
+.crop-selection[data-edge-hover="n"],
+.crop-selection[data-edge-hover="s"] {
+    cursor: ns-resize;
+}
+.crop-selection[data-edge-hover="e"],
+.crop-selection[data-edge-hover="w"] {
+    cursor: ew-resize;
+}
+.crop-selection[data-edge-hover="nw"],
+.crop-selection[data-edge-hover="se"] {
+    cursor: nwse-resize;
+}
+.crop-selection[data-edge-hover="ne"],
+.crop-selection[data-edge-hover="sw"] {
+    cursor: nesw-resize;
+}
+
 .crop-handle {
     position: absolute;
     display: block;
