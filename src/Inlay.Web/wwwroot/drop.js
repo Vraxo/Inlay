@@ -702,4 +702,9 @@
 })();
 
 
-window.inlay.yieldToBrowser = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
+window.inlay.yieldToBrowser = () => new Promise(resolve => {
+    if (document.visibilityState === "visible")
+        requestAnimationFrame(() => resolve());
+    else
+        setTimeout(resolve, 0);
+});
