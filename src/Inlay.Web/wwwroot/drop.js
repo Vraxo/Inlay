@@ -700,3 +700,6 @@
 
     window.inlayCropEditor = { initialize, setZoom };
 })();
+
+
+window.inlay.yieldToBrowser = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
