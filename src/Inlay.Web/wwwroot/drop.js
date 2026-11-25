@@ -61,6 +61,37 @@
         return { element: editor.image, width: editor.sourceWidth, height: editor.sourceHeight };
     }
 
+    function getResizeHandleAtPoint(selection, clientX, clientY) {
+        const bounds = selection.getBoundingClientRect();
+        const hitSize = 14;
+
+        const leftDistance = Math.abs(clientX - bounds.left);
+        const rightDistance = Math.abs(clientX - bounds.right);
+        const topDistance = Math.abs(clientY - bounds.top);
+        const bottomDistance = Math.abs(clientY - bounds.bottom);
+
+        const nearLeft = leftDistance <= hitSize;
+        const nearRight = rightDistance <= hitSize;
+        const nearTop = topDistance <= hitSize;
+        const nearBottom = bottomDistance <= hitSize;
+
+        const horizontal = nearLeft && (!nearRight || leftDistance <= rightDistance)
+            ? "w"
+            : nearRight ? "e" : "";
+        const vertical = nearTop && (!nearBottom || topDistance <= bottomDistance)
+            ? "n"
+            : nearBottom ? "s" : "";
+
+        if (vertical && horizontal)
+            return vertical + horizontal;
+        if (vertical)
+            return vertical;
+        if (horizontal)
+            return horizontal;
+
+        return "move";
+    }
+
     function setCrop(editor, x, y, width, height, radius) {
         editor.x = clamp(Math.round(x), 0, editor.sourceWidth - 1);
         editor.y = clamp(Math.round(y), 0, editor.sourceHeight - 1);
@@ -198,8 +229,8 @@
                 if (event.button !== 0 || editor.drag || editor.spacePressed)
                     return;
 
-                const handle = event.target.closest("[data-handle]");
-                if (!handle && !editor.selection.contains(event.target))
+                const grip = event.target.closest("[data-handle]");
+                if (!grip && !editor.selection.contains(event.target))
                     return;
 
                 event.preventDefault();
@@ -207,9 +238,12 @@
                 if (!bounds.width || !bounds.height)
                     return;
 
+                const handle = grip?.dataset.handle ??
+                    getResizeHandleAtPoint(editor.selection, event.clientX, event.clientY);
+
                 editor.drag = {
                     pointerId: event.pointerId,
-                    handle: handle?.dataset.handle || "move",
+                    handle,
                     startClientX: event.clientX,
                     startClientY: event.clientY,
                     bounds,
@@ -226,13 +260,25 @@
 
             editor.onPointerMove = event => {
                 const drag = editor.drag;
-                if (!drag || drag.pointerId !== event.pointerId)
+                if (!drag) {
+                    const grip = event.target.closest("[data-handle]");
+                    const handle = grip?.dataset.handle ??
+                        getResizeHandleAtPoint(editor.selection, event.clientX, event.clientY);
+                    editor.selection.dataset.edgeHover = handle === "move" ? "" : handle;
+                    return;
+                }
+
+                if (drag.pointerId !== event.pointerId)
                     return;
 
                 event.preventDefault();
                 const deltaX = Math.round((event.clientX - drag.startClientX) * editor.sourceWidth / drag.bounds.width);
                 const deltaY = Math.round((event.clientY - drag.startClientY) * editor.sourceHeight / drag.bounds.height);
                 applyDelta(editor, drag.handle, deltaX, deltaY);
+            };
+
+            editor.onSelectionLeave = () => {
+                delete editor.selection.dataset.edgeHover;
             };
 
             editor.onPointerUp = event => {
@@ -382,8 +428,8 @@
                     context.restore();
                 }
 
-                // The crop boundary is a one-CSS-pixel line, regardless of image zoom.
-                const edgeWidth = Math.max(1, dpr);
+                // Keep the crop boundary easy to see without letting it grow with image zoom.
+                const edgeWidth = 2.5 * dpr;
                 const edgeOffset = edgeWidth / 2;
                 const snapEdge = value =>
                     Math.round(value * scale - edgeOffset) + edgeOffset;
@@ -393,8 +439,7 @@
                 const edgeBottom = snapEdge(bottom);
 
                 context.save();
-                context.strokeStyle = dark ? "#ff9acb" : "#a82c70";
-                context.lineWidth = edgeWidth;
+                context.lineJoin = "round";
                 context.beginPath();
                 const edgeRadius = Math.min(
                     radius * scale,
@@ -413,6 +458,15 @@
                         edgeTop,
                         edgeRight - edgeLeft,
                         edgeBottom - edgeTop);
+
+                context.strokeStyle = dark
+                    ? "rgba(0,0,0,.95)"
+                    : "rgba(255,255,255,.98)";
+                context.lineWidth = 5 * dpr;
+                context.stroke();
+
+                context.strokeStyle = dark ? "#ff9acb" : "#a82c70";
+                context.lineWidth = edgeWidth;
                 context.stroke();
                 context.restore();
             };
@@ -420,8 +474,8 @@
             editor.updateTransform = () => {
                 stage.style.transform = `translate3d(${editor.panX}px, ${editor.panY}px, 0) scale(${editor.zoomFactor})`;
                 const sourceZoom = editor.zoomFactor * editor.fitScale;
-                const inverseZoom = sourceZoom > 0 ? 1 / sourceZoom : 1;
-                stage.style.setProperty("--inverse-source-zoom", String(inverseZoom));
+                const inverseZoom = editor.zoomFactor > 0 ? 1 / editor.zoomFactor : 1;
+                stage.style.setProperty("--inverse-stage-zoom", String(inverseZoom));
                 stage.classList.toggle("pixel-inspection-mode", sourceZoom >= 3);
                 editor.drawPixelGrid();
             };
@@ -597,6 +651,7 @@
             editor.onRadiusChange = () => commit(editor);
             editor.selection.addEventListener("pointerdown", editor.onPointerDown);
             editor.selection.addEventListener("pointermove", editor.onPointerMove);
+            editor.selection.addEventListener("pointerleave", editor.onSelectionLeave);
             editor.selection.addEventListener("pointerup", editor.onPointerUp);
             editor.selection.addEventListener("pointercancel", editor.onPointerUp);
             editor.selection.addEventListener("keydown", editor.onKeyDown);
