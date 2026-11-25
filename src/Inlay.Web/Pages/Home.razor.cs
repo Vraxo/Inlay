@@ -245,7 +245,7 @@ public partial class Home : IDisposable
                     if (progress >= nextProgressUpdate || progress == 100)
                     {
                         image.Progress = Math.Clamp(progress * 15 / 100, 0, 15);
-                        nextProgressUpdate = image.Progress + 5;
+                        nextProgressUpdate = progress + 5;
                         await RefreshBatchAsync();
                     }
                 }
