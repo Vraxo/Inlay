@@ -17,6 +17,7 @@ public sealed class ImageDetector
         if (source.Empty() || source.Width < 80 || source.Height < 80)
             return new DetectionResult(DetectionStatus.Rejected, null, null, "Image is empty or too small.");
 
+        await ReportProgress(2, reportProgress, yieldToBrowser);
         var scale = Math.Min(1.0, (double)MaximumAnalysisDimension / Math.Max(source.Width, source.Height));
         using var analysis = new Mat();
         if (scale < 1.0)
