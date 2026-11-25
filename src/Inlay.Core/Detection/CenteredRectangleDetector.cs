@@ -14,7 +14,8 @@ internal static class CenteredRectangleDetector
     internal static async Task<IReadOnlyList<Rect>> FindCandidatesAsync(
         Mat focusMap,
         Mat edges,
-        Func<Task>? yieldToBrowser = null)
+        Func<Task>? yieldToBrowser = null,
+        Action<int>? reportProgress = null)
     {
         var scale = Math.Min(1.0, (double)MaximumSearchDimension / Math.Max(focusMap.Width, focusMap.Height));
         using var focus = new Mat();
@@ -58,8 +59,13 @@ internal static class CenteredRectangleDetector
                 {
                     foreach (var offsetX in offsets)
                     {
-                        if (yieldToBrowser is not null && ++evaluatedCandidates % 128 == 0)
-                            await yieldToBrowser();
+                        evaluatedCandidates++;
+                        if (evaluatedCandidates % 128 == 0)
+                        {
+                            reportProgress?.Invoke(Math.Min(100, evaluatedCandidates * 100 / 5250));
+                            if (yieldToBrowser is not null)
+                                await yieldToBrowser();
+                        }
 
                         var centerX = focus.Width / 2.0 + offsetX * focus.Width;
                         var centerY = focus.Height / 2.0 + offsetY * focus.Height;
@@ -115,6 +121,7 @@ internal static class CenteredRectangleDetector
             AddDistinctResult(results, candidate.Bounds, scale);
         }
 
+        reportProgress?.Invoke(100);
         return results;
     }
 
