@@ -393,15 +393,10 @@
                         context.rect(x, y, w, h);
                     context.clip();
 
-                    const gridLineWidth = Math.max(1, dpr);
-                    const gridOffset = gridLineWidth / 2;
-                    const snapGridLine = value =>
-                        Math.round(value * scale - gridOffset) + gridOffset;
-
                     context.strokeStyle = dark
                         ? "rgba(255,255,255,.48)"
                         : "rgba(25,25,25,.42)";
-                    context.lineWidth = gridLineWidth;
+                    context.lineWidth = dpr;
                     context.beginPath();
 
                     const firstColumn = Math.max(1, Math.ceil(-left / sourcePixelWidth));
@@ -409,7 +404,7 @@
                         editor.width - 1,
                         Math.floor((viewportBounds.width - left) / sourcePixelWidth));
                     for (let column = firstColumn; column <= lastColumn; column++) {
-                        const lineX = snapGridLine(left + column * sourcePixelWidth);
+                        const lineX = (left + column * sourcePixelWidth) * scale;
                         context.moveTo(lineX, Math.max(0, y));
                         context.lineTo(lineX, Math.min(pixelHeight, bottom * scale));
                     }
@@ -419,7 +414,7 @@
                         editor.height - 1,
                         Math.floor((viewportBounds.height - top) / sourcePixelHeight));
                     for (let row = firstRow; row <= lastRow; row++) {
-                        const lineY = snapGridLine(top + row * sourcePixelHeight);
+                        const lineY = (top + row * sourcePixelHeight) * scale;
                         context.moveTo(Math.max(0, x), lineY);
                         context.lineTo(Math.min(pixelWidth, right * scale), lineY);
                     }
@@ -428,46 +423,47 @@
                     context.restore();
                 }
 
-                // Keep the crop boundary easy to see without letting it grow with image zoom.
-                const edgeWidth = 2.5 * dpr;
-                const edgeOffset = edgeWidth / 2;
-                const snapEdge = value =>
-                    Math.round(value * scale - edgeOffset) + edgeOffset;
-                const edgeLeft = snapEdge(left);
-                const edgeTop = snapEdge(top);
-                const edgeRight = snapEdge(right);
-                const edgeBottom = snapEdge(bottom);
+                // Draw the boundary entirely outside the crop. Its inner edge
+                // touches the included pixels without covering or separating them.
+                const drawOutsideStroke = (lineWidth, color) => {
+                    const inset = lineWidth / 2;
+                    const outerLeft = x - inset;
+                    const outerTop = y - inset;
+                    const outerWidth = w + inset * 2;
+                    const outerHeight = h + inset * 2;
+                    const outerRadius = Math.min(
+                        radius * scale + inset,
+                        outerWidth / 2,
+                        outerHeight / 2);
+
+                    context.beginPath();
+                    if (outerRadius > 0)
+                        context.roundRect(
+                            outerLeft,
+                            outerTop,
+                            outerWidth,
+                            outerHeight,
+                            outerRadius);
+                    else
+                        context.rect(
+                            outerLeft,
+                            outerTop,
+                            outerWidth,
+                            outerHeight);
+
+                    context.strokeStyle = color;
+                    context.lineWidth = lineWidth;
+                    context.stroke();
+                };
 
                 context.save();
                 context.lineJoin = "round";
-                context.beginPath();
-                const edgeRadius = Math.min(
-                    radius * scale,
-                    (edgeRight - edgeLeft) / 2,
-                    (edgeBottom - edgeTop) / 2);
-                if (edgeRadius > 0)
-                    context.roundRect(
-                        edgeLeft,
-                        edgeTop,
-                        edgeRight - edgeLeft,
-                        edgeBottom - edgeTop,
-                        edgeRadius);
-                else
-                    context.rect(
-                        edgeLeft,
-                        edgeTop,
-                        edgeRight - edgeLeft,
-                        edgeBottom - edgeTop);
-
-                context.strokeStyle = dark
-                    ? "rgba(0,0,0,.95)"
-                    : "rgba(255,255,255,.98)";
-                context.lineWidth = 5 * dpr;
-                context.stroke();
-
-                context.strokeStyle = dark ? "#ff9acb" : "#a82c70";
-                context.lineWidth = edgeWidth;
-                context.stroke();
+                drawOutsideStroke(
+                    5 * dpr,
+                    dark ? "rgba(255,255,255,.92)" : "rgba(0,0,0,.9)");
+                drawOutsideStroke(
+                    2.5 * dpr,
+                    dark ? "#ff9acb" : "#a82c70");
                 context.restore();
             };
 
