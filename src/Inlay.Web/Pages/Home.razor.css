@@ -1285,6 +1285,9 @@ html[data-theme="dark"] .crop-handle {
 .batch-progress-track {
     height: 5px;
 }
+.batch-progress-fill {
+    background: var(--brand-gradient);
+}
 .batch-progress-fill.indeterminate {
     width: 34%;
     animation: inlay-progress 1.15s ease-in-out infinite;
