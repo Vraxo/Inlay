@@ -272,7 +272,7 @@ public partial class Home : IDisposable
                 image.Detection = await detector.DetectAsync(
                     source,
                     progress => image.Progress = 18 + progress * 62 / 100,
-                    YieldToBrowserAsync);
+                    RefreshBatchAsync);
 
                 if (image.Detection.Best is not null)
                 {
