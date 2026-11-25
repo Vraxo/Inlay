@@ -54,7 +54,7 @@
                 <div class="batch-summary-info">
                     <strong>@CompletedCount / @images.Count finished</strong>
                     <span>@ReadyCount ready · @ReviewCount to review · @FailedCount failed</span>
-                    <div class="batch-overall-track" role="progressbar" aria-label="Batch completion" aria-valuemin="0" aria-valuemax="@images.Count" aria-valuenow="@CompletedCount">
+                    <div class="batch-overall-track" role="progressbar" aria-label="Batch completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@BatchProgressPercent">
                         <span style="@BatchProgressStyle"></span>
                     </div>
                 </div>
