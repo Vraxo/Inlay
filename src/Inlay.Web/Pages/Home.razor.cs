@@ -126,7 +126,7 @@ public partial class Home : IDisposable
             BatchStatus.CreatingPreview => "Preparing preview",
             BatchStatus.Completed when image.Detection?.Status == DetectionStatus.Extracted => "Extracted",
             BatchStatus.Completed when image.Detection?.Status == DetectionStatus.Review => "Review",
-            BatchStatus.Completed when image.Detection?.Status == DetectionStatus.Rejected && image.Detection.Best is null => "No crop",
+            BatchStatus.Completed when image.Detection is { Status: DetectionStatus.Rejected, Best: null } => "No crop",
             BatchStatus.Completed when image.Detection?.Status == DetectionStatus.Rejected => "Rejected",
             BatchStatus.Completed => "Manual crop",
             _ => "Queued"
