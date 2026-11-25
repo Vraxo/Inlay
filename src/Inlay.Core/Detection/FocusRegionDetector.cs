@@ -13,7 +13,12 @@ internal static class FocusRegionDetector
         Cv2.GaussianBlur(absolute, focusMap, new Size(21, 21), 0);
     }
 
-    internal static IReadOnlyList<Rect> FindCandidates(Mat focusMap)
+    internal static IReadOnlyList<Rect> FindCandidates(Mat focusMap) =>
+        FindCandidatesAsync(focusMap).GetAwaiter().GetResult();
+
+    internal static async Task<IReadOnlyList<Rect>> FindCandidatesAsync(
+        Mat focusMap,
+        Func<Task>? yieldToBrowser = null)
     {
         using var mask = new Mat();
         using var closeKernel = Cv2.GetStructuringElement(
@@ -27,8 +32,11 @@ internal static class FocusRegionDetector
         Cv2.FindContours(mask, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
 
         var candidates = new List<Rect>();
+        var contourIndex = 0;
         foreach (var contour in contours)
         {
+            if (yieldToBrowser is not null && (contourIndex++ & 15) == 0)
+                await yieldToBrowser();
             var bounds = Cv2.BoundingRect(contour);
             var areaRatio = (double)bounds.Width * bounds.Height / (focusMap.Width * focusMap.Height);
             var aspectRatio = (double)bounds.Width / Math.Max(1, bounds.Height);
