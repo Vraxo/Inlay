@@ -69,7 +69,7 @@
                         {
                             <img src="@image.ThumbnailPreview" alt="" />
                         }
-                        else if (image.IsIndeterminate)
+                        else if (image.Status is BatchStatus.Reading or BatchStatus.Decoding or BatchStatus.Detecting or BatchStatus.CreatingPreview)
                         {
                             <span class="batch-placeholder batch-spinner" aria-hidden="true"></span>
                         }
@@ -83,8 +83,8 @@
                             @if (!image.IsComplete)
                             {
                                 <span class="batch-item-progress">
-                                    <span class="batch-progress-track" role="progressbar" aria-label="@($"{image.FileName} progress")" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@(image.IsIndeterminate ? null : image.Progress)">
-                                        <span class="batch-progress-fill @(image.IsIndeterminate ? "indeterminate" : "")" style="@GetProgressStyle(image)"></span>
+                                    <span class="batch-progress-track" role="progressbar" aria-label="@($"{image.FileName} progress")" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@image.Progress">
+                                        <span class="batch-progress-fill" style="@GetProgressStyle(image)"></span>
                                     </span>
                                     <small>@GetProgressText(image)</small>
                                 </span>
