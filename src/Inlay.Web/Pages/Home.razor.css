@@ -1065,8 +1065,8 @@ footer {
     touch-action: none;
 }
 .crop-handle:focus-visible {
-    outline: 2px solid #f77737;
-    outline-offset: 3px;
+    outline: calc(2px * var(--handle-zoom)) solid #f77737;
+    outline-offset: calc(3px * var(--handle-zoom));
 }
 .handle-n, .handle-s {
     left: 50%;
