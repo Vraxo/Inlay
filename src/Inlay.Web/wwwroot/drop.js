@@ -425,7 +425,7 @@
 
                 // Draw the boundary entirely outside the crop. Its inner edge
                 // touches the included pixels without covering or separating them.
-                const drawOutsideStroke = (lineWidth, color) => {
+                const drawOutsideStroke = (lineWidth, strokeStyle) => {
                     const inset = lineWidth / 2;
                     const outerLeft = x - inset;
                     const outerTop = y - inset;
@@ -451,19 +451,26 @@
                             outerWidth,
                             outerHeight);
 
-                    context.strokeStyle = color;
+                    context.strokeStyle = strokeStyle;
                     context.lineWidth = lineWidth;
                     context.stroke();
                 };
 
+                const gradient = context.createLinearGradient(
+                    x,
+                    y,
+                    x + w,
+                    y + h);
+                gradient.addColorStop(0, "#feda75");
+                gradient.addColorStop(0.24, "#fa7e1e");
+                gradient.addColorStop(0.5, "#d62976");
+                gradient.addColorStop(0.76, "#962fbf");
+                gradient.addColorStop(1, "#4f5bd5");
+
                 context.save();
                 context.lineJoin = "round";
-                drawOutsideStroke(
-                    5 * dpr,
-                    dark ? "rgba(255,255,255,.92)" : "rgba(0,0,0,.9)");
-                drawOutsideStroke(
-                    2.5 * dpr,
-                    dark ? "#ff9acb" : "#a82c70");
+                drawOutsideStroke(5 * dpr, "rgba(0,0,0,.88)");
+                drawOutsideStroke(2.5 * dpr, gradient);
                 context.restore();
             };
 
