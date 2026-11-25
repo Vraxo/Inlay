@@ -1,0 +1,116 @@
+@namespace Inlay.Web.Pages
+@implements IDisposable
+
+<button type="button"
+        class="batch-item @(IsSelected ? "selected" : "") @(!Image.CanSelect ? "pending" : "")"
+        @onclick="SelectImage"
+        disabled="@(!Image.CanSelect)">
+    @if (!string.IsNullOrEmpty(Image.ThumbnailPreview))
+    {
+        <img src="@Image.ThumbnailPreview" alt="" />
+    }
+    else if (Image.Status is BatchStatus.Reading or BatchStatus.Decoding or BatchStatus.Detecting or BatchStatus.CreatingPreview)
+    {
+        <span class="batch-placeholder batch-spinner" aria-hidden="true"></span>
+    }
+    else
+    {
+        <span class="batch-placeholder">@(Image.Status == BatchStatus.Failed ? "×" : "…")</span>
+    }
+    <span class="batch-item-info">
+        <strong title="@Image.FileName">@Image.FileName</strong>
+        <small class="status @GetBatchStatusClass(Image)">@GetStatusLabel(Image)</small>
+        @if (!Image.IsComplete)
+        {
+            <span class="batch-item-progress">
+                <span class="batch-progress-track" role="progressbar" aria-label="@($"{Image.FileName} progress")" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@Image.Progress">
+                    <span class="batch-progress-fill" style="@GetProgressStyle(Image)"></span>
+                </span>
+                <small>@GetProgressText(Image)</small>
+            </span>
+        }
+        @if (!string.IsNullOrEmpty(Image.Error))
+        {
+            <small class="batch-error">@Image.Error</small>
+        }
+    </span>
+    @if (IsSelected)
+    {
+        <span class="selected-mark">✓</span>
+    }
+</button>
+
+@code {
+    [Parameter, EditorRequired] public BatchImage Image { get; set; } = null!;
+    [Parameter] public bool IsSelected { get; set; }
+    [Parameter] public EventCallback<BatchImage> OnSelect { get; set; }
+    private BatchImage? subscribedImage;
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(subscribedImage, Image))
+            return;
+        if (subscribedImage is not null)
+            subscribedImage.Changed -= OnImageChanged;
+        subscribedImage = Image;
+        subscribedImage.Changed += OnImageChanged;
+    }
+
+    private void OnImageChanged(object? sender, EventArgs args) => _ = InvokeAsync(StateHasChanged);
+    private Task SelectImage() => OnSelect.InvokeAsync(Image);
+
+    private static string GetStatusLabel(BatchImage image)
+    {
+        if (image.Status == BatchStatus.Failed)
+            return "Failed";
+        return image.Status switch
+        {
+            BatchStatus.Queued => "Queued",
+            BatchStatus.Reading => "Reading",
+            BatchStatus.Decoding => "Decoding image",
+            BatchStatus.Detecting => "Finding image",
+            BatchStatus.CreatingPreview => "Preparing preview",
+            BatchStatus.Completed when image.Detection?.Status == DetectionStatus.Extracted => "Extracted",
+            BatchStatus.Completed when image.Detection?.Status == DetectionStatus.Review => "Review",
+            BatchStatus.Completed when image.Detection is { Status: DetectionStatus.Rejected, Best: null } => "No crop",
+            BatchStatus.Completed when image.Detection?.Status == DetectionStatus.Rejected => "Rejected",
+            BatchStatus.Completed => "Manual crop",
+            _ => "Queued"
+        };
+    }
+
+    private static string GetBatchStatusClass(BatchImage image)
+    {
+        if (image.Status == BatchStatus.Failed)
+            return "rejected";
+        if (image.Status != BatchStatus.Completed)
+            return "processing";
+        return image.Detection?.Status switch
+        {
+            DetectionStatus.Extracted => "success",
+            DetectionStatus.Review => "review",
+            DetectionStatus.Rejected => "rejected",
+            _ => "rejected"
+        };
+    }
+
+    private static string GetProgressText(BatchImage image) => image.Status switch
+    {
+        BatchStatus.Queued => "Waiting",
+        BatchStatus.Reading => $"Reading file · {Math.Clamp((int)Math.Round(image.Progress / 15d * 100), 0, 100)}%",
+        BatchStatus.Decoding => "Decoding image",
+        BatchStatus.Detecting => $"Finding image · {Math.Clamp((int)Math.Round((image.Progress - 15) / 65d * 100), 0, 100)}%",
+        BatchStatus.CreatingPreview => "Creating preview",
+        BatchStatus.Completed => GetStatusLabel(image),
+        BatchStatus.Failed => image.Error,
+        _ => ""
+    };
+
+    private static string GetProgressStyle(BatchImage image) => $"width: {image.Progress}%";
+
+    public void Dispose()
+    {
+        if (subscribedImage is not null)
+            subscribedImage.Changed -= OnImageChanged;
+    }
+}

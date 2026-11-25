@@ -1,0 +1,49 @@
+@namespace Inlay.Web.Pages
+@implements IDisposable
+
+@if (Images.Count > 0)
+{
+    <section class="batch-summary">
+        <div class="batch-summary-info">
+            <strong>@CompletedCount / @Images.Count finished</strong>
+            <span>@ReadyCount ready · @ReviewCount to review · @RejectedCount rejected · @FailedCount failed</span>
+            <div class="batch-overall-track" role="progressbar" aria-label="Batch completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@BatchProgressPercent">
+                <span style="@BatchProgressStyle"></span>
+            </div>
+        </div>
+        <button class="download batch-download" @onclick="OnDownloadAll" disabled="@(SuccessfulCount == 0)">@(IsProcessing ? "Download ready" : "Download all") <span>↓</span></button>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<BatchImage> Images { get; set; } = [];
+    [Parameter] public bool IsProcessing { get; set; }
+    [Parameter] public EventCallback OnDownloadAll { get; set; }
+    private IReadOnlyList<BatchImage> subscribedImages = [];
+
+    private int SuccessfulCount => Images.Count(image => image.CropBytes is not null);
+    private int ReadyCount => Images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status == DetectionStatus.Extracted);
+    private int ReviewCount => Images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status == DetectionStatus.Review);
+    private int RejectedCount => Images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status == DetectionStatus.Rejected);
+    private int FailedCount => Images.Count(image => image.Status == BatchStatus.Failed);
+    private int CompletedCount => Images.Count(image => image.IsComplete);
+    private int BatchProgressPercent => Images.Count == 0 ? 0 : (int)Math.Round(Images.Sum(image => image.Progress) / (double)Images.Count);
+    private string BatchProgressStyle => $"width: {BatchProgressPercent}%";
+
+    protected override void OnParametersSet()
+    {
+        foreach (var image in subscribedImages)
+            image.Changed -= OnImageChanged;
+        subscribedImages = Images.ToArray();
+        foreach (var image in subscribedImages)
+            image.Changed += OnImageChanged;
+    }
+
+    private void OnImageChanged(object? sender, EventArgs args) => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        foreach (var image in subscribedImages)
+            image.Changed -= OnImageChanged;
+    }
+}

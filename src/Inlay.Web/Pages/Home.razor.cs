@@ -1,22 +1,27 @@
+using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text.Json;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
-using OpenCvSharp;
 using Inlay.Detection;
-using Inlay.Extraction;
+using Inlay.Processing;
 
 namespace Inlay.Web.Pages;
 
-public partial class Home : IDisposable
+public partial class Home : IAsyncDisposable
 {
     private const long MaximumFileSize = 25 * 1024 * 1024;
     private const long MaximumBatchSize = 100 * 1024 * 1024;
     private const int MaximumFiles = 50;
 
-    private readonly ImageDetector detector = new();
+    private const int MaximumConcurrentWorkers = 2;
     private readonly List<BatchImage> images = [];
+    private IJSObjectReference? workerPoolModule;
+    private DotNetObjectReference<Home>? workerProgressReference;
+    private int workerCount;
+    private int selectionVersion;
+    private string processingMessage = "";
     private BatchImage? activeImage;
     private string error = "";
     private string validationMessage = "";
@@ -86,23 +91,47 @@ public partial class Home : IDisposable
         return Task.CompletedTask;
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         cropEditorReference?.Dispose();
+        workerProgressReference?.Dispose();
+
+        if (workerPoolModule is not null)
+        {
+            try
+            {
+                await workerPoolModule.InvokeVoidAsync("dispose");
+                await workerPoolModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+
+        foreach (var image in images)
+        {
+            if (string.IsNullOrEmpty(image.SourcePreview))
+                continue;
+
+            try
+            {
+                await JS.InvokeVoidAsync("inlay.revokeObjectUrl", image.SourcePreview);
+            }
+            catch (JSDisconnectedException)
+            {
+                break;
+            }
+        }
     }
 
     private async Task ToggleTheme()
     {
         isDarkTheme = await JS.InvokeAsync<bool>("inlay.toggleTheme");
     }
-    private int SuccessfulCount => images.Count(image => image.CropBytes is not null);
     private int ReadyCount => images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status == DetectionStatus.Extracted);
     private int ReviewCount => images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status == DetectionStatus.Review);
     private int RejectedCount => images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status == DetectionStatus.Rejected);
     private int FailedCount => images.Count(image => image.Status == BatchStatus.Failed);
-    private int CompletedCount => images.Count(image => image.IsComplete);
-    private int BatchProgressPercent => images.Count == 0 ? 0 : (int)Math.Round(images.Sum(image => image.Progress) / (double)images.Count);
-    private string BatchProgressStyle => $"width: {BatchProgressPercent}%";
     private bool HasResults => images.Count > 0;
 
     private static string GetStatusClass(DetectionResult? result) => result?.Status switch
@@ -122,7 +151,7 @@ public partial class Home : IDisposable
             BatchStatus.Queued => "Queued",
             BatchStatus.Reading => "Reading",
             BatchStatus.Decoding => "Decoding image",
-            BatchStatus.Detecting => "Detecting",
+            BatchStatus.Detecting => "Finding image",
             BatchStatus.CreatingPreview => "Preparing preview",
             BatchStatus.Completed when image.Detection?.Status == DetectionStatus.Extracted => "Extracted",
             BatchStatus.Completed when image.Detection?.Status == DetectionStatus.Review => "Review",
@@ -132,38 +161,6 @@ public partial class Home : IDisposable
             _ => "Queued"
         };
     }
-
-    private static string GetBatchStatusClass(BatchImage image)
-    {
-        if (image.Status == BatchStatus.Failed)
-            return "rejected";
-
-        if (image.Status != BatchStatus.Completed)
-            return "processing";
-
-        return image.Detection?.Status switch
-        {
-            DetectionStatus.Extracted => "success",
-            DetectionStatus.Review => "review",
-            DetectionStatus.Rejected => "rejected",
-            _ => "rejected"
-        };
-    }
-
-    private static string GetProgressText(BatchImage image) => image.Status switch
-    {
-        BatchStatus.Queued => "Waiting",
-        BatchStatus.Reading => $"Reading file · {Math.Clamp((int)Math.Round(image.Progress / 15d * 100), 0, 100)}%",
-        BatchStatus.Decoding => "Decoding image",
-        BatchStatus.Detecting => $"Finding image · {Math.Clamp((int)Math.Round((image.Progress - 15) / 65d * 100), 0, 100)}%",
-        BatchStatus.CreatingPreview => "Creating preview",
-        BatchStatus.Completed => GetStatusLabel(image),
-        BatchStatus.Failed => image.Error,
-        _ => ""
-    };
-
-    private static string GetProgressStyle(BatchImage image) =>
-        $"width: {image.Progress}%";
 
     private async Task LoadImages(InputFileChangeEventArgs args)
     {
@@ -190,9 +187,16 @@ public partial class Home : IDisposable
             return;
         }
 
+        foreach (var image in images)
+        {
+            if (!string.IsNullOrEmpty(image.SourcePreview))
+                await JS.InvokeVoidAsync("inlay.revokeObjectUrl", image.SourcePreview);
+        }
+
         images.Clear();
         activeImage = null;
         cropEditorNeedsInitialization = true;
+        selectionVersion++;
         foreach (var file in files)
             images.Add(new BatchImage { FileName = file.Name });
 
@@ -200,18 +204,65 @@ public partial class Home : IDisposable
             return;
 
         isProcessing = true;
+        processingMessage = "Starting background image workers…";
         await RefreshBatchAsync();
 
         try
         {
-            for (var index = 0; index < files.Count; index++)
-                await ProcessImage(files[index], images[index]);
+            await EnsureWorkerPoolAsync();
+            processingMessage = $"Processing up to {workerCount} images at a time in the background. Completed crops remain selectable.";
+            await RefreshBatchAsync();
+
+            using var concurrency = new SemaphoreSlim(workerCount, workerCount);
+            var tasks = files.Select((file, index) =>
+                ProcessWithLimitAsync(file, images[index], concurrency));
+            await Task.WhenAll(tasks);
+        }
+        catch (Exception exception)
+        {
+            error = $"Background processing could not continue: {exception.Message}";
         }
         finally
         {
             isProcessing = false;
+            processingMessage = "";
             await RefreshBatchAsync();
         }
+    }
+
+    private async Task EnsureWorkerPoolAsync()
+    {
+        workerPoolModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./worker-pool.js");
+        workerProgressReference ??= DotNetObjectReference.Create(this);
+        workerCount = await workerPoolModule.InvokeAsync<int>(
+            "initialize", MaximumConcurrentWorkers, workerProgressReference);
+
+        if (workerCount < 1)
+            throw new InvalidOperationException("No background image workers could be started.");
+    }
+
+    private async Task ProcessWithLimitAsync(IBrowserFile file, BatchImage image, SemaphoreSlim concurrency)
+    {
+        await concurrency.WaitAsync();
+        try
+        {
+            await ProcessImage(file, image);
+        }
+        finally
+        {
+            concurrency.Release();
+        }
+    }
+
+    [JSInvokable]
+    public Task ReportWorkerProgress(string imageId, int progress)
+    {
+        var image = images.FirstOrDefault(item => item.Id == imageId);
+        if (image is null || image.Status != BatchStatus.Detecting)
+            return Task.CompletedTask;
+
+        image.Progress = Math.Clamp(18 + progress * 62 / 100, 18, 80);
+        return Task.CompletedTask;
     }
 
     private async Task ProcessImage(IBrowserFile file, BatchImage image)
@@ -219,20 +270,17 @@ public partial class Home : IDisposable
         if (file.Size > MaximumFileSize)
         {
             FailImage(image, "Larger than 25 MB.");
-            await RefreshBatchAsync();
             return;
         }
 
         if (file.ContentType is not ("image/png" or "image/jpeg" or "image/webp"))
         {
             FailImage(image, "Unsupported format.");
-            await RefreshBatchAsync();
             return;
         }
 
         image.Status = BatchStatus.Reading;
         image.Progress = 0;
-        await RefreshBatchAsync();
 
         try
         {
@@ -255,7 +303,6 @@ public partial class Home : IDisposable
                     {
                         image.Progress = Math.Clamp(progress * 15 / 100, 0, 15);
                         nextProgressUpdate = progress + 5;
-                        await RefreshBatchAsync();
                     }
                 }
 
@@ -264,55 +311,36 @@ public partial class Home : IDisposable
 
             image.SourceBytes = sourceBytes;
             image.SourceContentType = file.ContentType;
-            image.Status = BatchStatus.Decoding;
-            image.Progress = 15;
-            await RefreshBatchAsync();
+            image.Status = BatchStatus.Detecting;
+            image.Progress = 18;
 
-            using (var source = Cv2.ImDecode(image.SourceBytes, ImreadModes.Color))
-            {
-                if (source.Empty())
-                    throw new InvalidDataException("Could not decode this image.");
+            var payload = await workerPoolModule!.InvokeAsync<byte[]>("process", image.Id, sourceBytes);
+            var processed = ParseWorkerPayload(payload);
 
-                image.SourceWidth = source.Width;
-                image.SourceHeight = source.Height;
-                image.Status = BatchStatus.Detecting;
-                image.Progress = 18;
-                await RefreshBatchAsync();
-                image.Detection = await detector.DetectAsync(
-                    source,
-                    progress => image.Progress = 18 + progress * 62 / 100,
-                    RefreshBatchAsync);
+            image.SourceWidth = processed.Metadata.SourceWidth;
+            image.SourceHeight = processed.Metadata.SourceHeight;
+            image.Detection = new DetectionResult(
+                Enum.Parse<DetectionStatus>(processed.Metadata.Status),
+                CreateCandidate(processed.Metadata.Best),
+                CreateCandidate(processed.Metadata.Second),
+                processed.Metadata.Reason);
 
-                if (image.Detection.Best is not null)
-                {
-                    image.CropX = image.Detection.Best.Bounds.X;
-                    image.CropY = image.Detection.Best.Bounds.Y;
-                    image.CropWidth = image.Detection.Best.Bounds.Width;
-                    image.CropHeight = image.Detection.Best.Bounds.Height;
-                    image.CornerRadius = image.Detection.Best.CornerRadius;
-                }
-                else
-                {
-                    image.CropWidth = source.Width;
-                    image.CropHeight = source.Height;
-                }
-            }
+            var best = image.Detection.Best;
+            image.CropX = best?.Bounds.X ?? 0;
+            image.CropY = best?.Bounds.Y ?? 0;
+            image.CropWidth = best?.Bounds.Width ?? image.SourceWidth;
+            image.CropHeight = best?.Bounds.Height ?? image.SourceHeight;
+            image.CornerRadius = best?.CornerRadius ?? 0;
 
             image.Status = BatchStatus.CreatingPreview;
-            image.Progress = 84;
-            await RefreshBatchAsync();
-
-            image.CropBytes = CreateCrop(image, image.CropX, image.CropY, image.CropWidth, image.CropHeight, image.CornerRadius);
             image.Progress = 94;
-            await RefreshBatchAsync();
-            image.ThumbnailPreview = CreateThumbnail(image.CropBytes);
+            image.CropBytes = processed.CropBytes;
+            image.ThumbnailPreview = CreateDataUrl(processed.ThumbnailBytes, "image/png");
             image.Status = BatchStatus.Completed;
             image.Progress = 100;
 
             if (activeImage is null)
-                SelectImage(image);
-
-            await RefreshBatchAsync();
+                await SelectImage(image);
         }
         catch (Exception exception)
         {
@@ -321,8 +349,52 @@ public partial class Home : IDisposable
             image.CropBytes = null;
             image.SourcePreview = "";
             image.ThumbnailPreview = "";
-            await RefreshBatchAsync();
         }
+    }
+
+    private static ProcessedImage ParseWorkerPayload(byte[] payload)
+    {
+        if (payload.Length < 12)
+            throw new InvalidDataException("The background processor returned an incomplete result.");
+
+        var metadataLength = BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(0, 4));
+        var cropLength = BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(4, 4));
+        var thumbnailLength = BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(8, 4));
+        var expectedLength = 12L + metadataLength + cropLength + thumbnailLength;
+
+        if (metadataLength <= 0 || cropLength <= 0 || thumbnailLength <= 0 || expectedLength != payload.LongLength)
+            throw new InvalidDataException("The background processor returned invalid image data.");
+
+        var metadata = JsonSerializer.Deserialize<WorkerMetadata>(
+            payload.AsSpan(12, metadataLength),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        if (metadata is null || metadata.SourceWidth <= 0 || metadata.SourceHeight <= 0)
+            throw new InvalidDataException("The background processor returned invalid image metadata.");
+
+        var cropOffset = 12 + metadataLength;
+        var thumbnailOffset = cropOffset + cropLength;
+        return new ProcessedImage(
+            metadata,
+            payload.AsSpan(cropOffset, cropLength).ToArray(),
+            payload.AsSpan(thumbnailOffset, thumbnailLength).ToArray());
+    }
+
+    private static DetectionCandidate? CreateCandidate(WorkerCandidate? candidate)
+    {
+        if (candidate is null)
+            return null;
+
+        return new DetectionCandidate(
+            new OpenCvSharp.Rect(candidate.X, candidate.Y, candidate.Width, candidate.Height),
+            candidate.Confidence,
+            candidate.BoundaryContinuity,
+            candidate.EdgeStrength,
+            candidate.GeometryFit,
+            candidate.SharpnessContrast,
+            candidate.CornerFit,
+            candidate.CornerRadius,
+            candidate.AreaRatio);
     }
 
     private static void FailImage(BatchImage image, string message)
@@ -332,22 +404,22 @@ public partial class Home : IDisposable
         image.Progress = 100;
     }
 
-    private async Task RefreshBatchAsync()
-    {
-        await InvokeAsync(StateHasChanged);
-        await YieldToBrowserAsync();
-    }
+    private Task RefreshBatchAsync() => InvokeAsync(StateHasChanged);
 
-    private Task YieldToBrowserAsync() =>
-        JS.InvokeVoidAsync("inlay.yieldToBrowser").AsTask();
-
-    private void SelectImage(BatchImage image)
+    private async Task SelectImage(BatchImage image)
     {
+        if (!image.CanSelect)
+            return;
+
+        var requestVersion = ++selectionVersion;
+        SaveActiveImage();
+
         foreach (var other in images)
         {
-            if (ReferenceEquals(other, image))
+            if (ReferenceEquals(other, image) || string.IsNullOrEmpty(other.SourcePreview))
                 continue;
 
+            await JS.InvokeVoidAsync("inlay.revokeObjectUrl", other.SourcePreview);
             other.SourcePreview = "";
         }
 
@@ -359,9 +431,24 @@ public partial class Home : IDisposable
         cropWidth = image.CropWidth;
         cropHeight = image.CropHeight;
         cornerRadius = image.CornerRadius;
-        image.SourcePreview = CreateDataUrl(image.SourceBytes!, image.SourceContentType);
         cropEditorNeedsInitialization = true;
         validationMessage = "";
+
+        if (string.IsNullOrEmpty(image.SourcePreview))
+        {
+            var previewUrl = await JS.InvokeAsync<string>(
+                "inlay.createObjectUrl", image.SourceBytes!, image.SourceContentType);
+
+            if (requestVersion != selectionVersion || !ReferenceEquals(activeImage, image))
+            {
+                await JS.InvokeVoidAsync("inlay.revokeObjectUrl", previewUrl);
+                return;
+            }
+
+            image.SourcePreview = previewUrl;
+        }
+
+        await InvokeAsync(StateHasChanged);
     }
 
     private void SaveActiveImage()
@@ -415,8 +502,8 @@ public partial class Home : IDisposable
 
         try
         {
-            activeImage.CropBytes = CreateCrop(activeImage, cropX, cropY, cropWidth, cropHeight, cornerRadius);
-            activeImage.ThumbnailPreview = CreateThumbnail(activeImage.CropBytes);
+            activeImage.CropBytes = ImageProcessing.CreateCrop(activeImage.SourceBytes!, cropX, cropY, cropWidth, cropHeight, cornerRadius);
+            activeImage.ThumbnailPreview = CreateDataUrl(ImageProcessing.CreateThumbnail(activeImage.CropBytes), "image/png");
             SaveActiveImage();
             cropEditorNeedsInitialization = true;
         }
@@ -426,49 +513,6 @@ public partial class Home : IDisposable
             activeImage.ThumbnailPreview = "";
             validationMessage = $"Could not create crop: {exception.Message}";
         }
-    }
-
-    private static byte[] CreateCrop(BatchImage image, int x, int y, int width, int height, int radius)
-    {
-        using var source = Cv2.ImDecode(image.SourceBytes!, ImreadModes.Color);
-        using var crop = new Mat(source, new Rect(x, y, width, height));
-        using var bgra = new Mat();
-        Cv2.CvtColor(crop, bgra, ColorConversionCodes.BGR2BGRA);
-        using var mask = ImageExtractor.CreateRoundedMask(width, height, radius);
-        Cv2.InsertChannel(mask, bgra, 3);
-
-        if (!Cv2.ImEncode(".png", bgra, out var encodedCrop))
-            throw new InvalidOperationException("Could not encode the crop as PNG.");
-
-        return encodedCrop;
-    }
-
-    private static string CreateThumbnail(byte[] cropBytes)
-    {
-        using var source = Cv2.ImDecode(cropBytes, ImreadModes.Unchanged);
-        if (source.Empty())
-            throw new InvalidOperationException("Could not decode the crop thumbnail.");
-
-        const int maximumDimension = 144;
-        var scale = Math.Min(1d, maximumDimension / (double)Math.Max(source.Width, source.Height));
-        using var thumbnail = new Mat();
-
-        if (scale < 1)
-        {
-            var size = new Size(
-                Math.Max(1, (int)Math.Round(source.Width * scale)),
-                Math.Max(1, (int)Math.Round(source.Height * scale)));
-            Cv2.Resize(source, thumbnail, size, interpolation: InterpolationFlags.Area);
-        }
-        else
-        {
-            source.CopyTo(thumbnail);
-        }
-
-        if (!Cv2.ImEncode(".png", thumbnail, out var encodedThumbnail))
-            throw new InvalidOperationException("Could not encode the crop thumbnail.");
-
-        return CreateDataUrl(encodedThumbnail, "image/png");
     }
 
     private static string CreateDataUrl(byte[] bytes, string contentType) =>
@@ -623,37 +667,30 @@ public partial class Home : IDisposable
     private static string GetOutputName(string fileName) =>
         $"{Path.GetFileNameWithoutExtension(fileName)}.inlay.png";
 
-    private enum BatchStatus
-    {
-        Queued,
-        Reading,
-        Decoding,
-        Detecting,
-        CreatingPreview,
-        Completed,
-        Failed
-    }
+    private sealed record WorkerMetadata(
+        int SourceWidth,
+        int SourceHeight,
+        string Status,
+        string Reason,
+        WorkerCandidate? Best,
+        WorkerCandidate? Second);
 
-    private sealed class BatchImage
-    {
-        public string FileName { get; init; } = "";
-        public string Error { get; set; } = "";
-        public byte[]? SourceBytes { get; set; }
-        public byte[]? CropBytes { get; set; }
-        public string SourceContentType { get; set; } = "image/png";
-        public string SourcePreview { get; set; } = "";
-        public string ThumbnailPreview { get; set; } = "";
-        public int SourceWidth { get; set; }
-        public int SourceHeight { get; set; }
-        public int CropX { get; set; }
-        public int CropY { get; set; }
-        public int CropWidth { get; set; }
-        public int CropHeight { get; set; }
-        public int CornerRadius { get; set; }
-        public int Progress { get; set; }
-        public BatchStatus Status { get; set; } = BatchStatus.Queued;
-        public bool IsComplete => Status is BatchStatus.Completed or BatchStatus.Failed;
-        public bool CanSelect => Status == BatchStatus.Completed && SourceBytes is not null && SourceWidth > 0 && SourceHeight > 0;
-        public DetectionResult? Detection { get; set; }
-    }
+    private sealed record WorkerCandidate(
+        int X,
+        int Y,
+        int Width,
+        int Height,
+        double Confidence,
+        double BoundaryContinuity,
+        double EdgeStrength,
+        double GeometryFit,
+        double SharpnessContrast,
+        double CornerFit,
+        int CornerRadius,
+        double AreaRatio);
+
+    private sealed record ProcessedImage(
+        WorkerMetadata Metadata,
+        byte[] CropBytes,
+        byte[] ThumbnailBytes);
 }

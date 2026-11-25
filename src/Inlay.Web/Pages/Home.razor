@@ -45,60 +45,20 @@
 
         @if (isProcessing)
         {
-            <div class="message batch-message">Processing one image at a time. Completed crops are available while the rest continue.</div>
+            <div class="message batch-message">@processingMessage</div>
         }
 
         @if (HasResults)
         {
-            <section class="batch-summary">
-                <div class="batch-summary-info">
-                    <strong>@CompletedCount / @images.Count finished</strong>
-                    <span>@ReadyCount ready · @ReviewCount to review · @RejectedCount rejected · @FailedCount failed</span>
-                    <div class="batch-overall-track" role="progressbar" aria-label="Batch completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@BatchProgressPercent">
-                        <span style="@BatchProgressStyle"></span>
-                    </div>
-                </div>
-                <button class="download batch-download" @onclick="DownloadAll" disabled="@(SuccessfulCount == 0)">@(isProcessing ? "Download ready" : "Download all") <span>↓</span></button>
-            </section>
+            <BatchSummary Images="images" IsProcessing="isProcessing" OnDownloadAll="DownloadAll" />
 
             <div class="batch-list" aria-label="Image batch">
                 @foreach (var image in images)
                 {
-                    <button class="batch-item @(ReferenceEquals(activeImage, image) ? "selected" : "") @(!image.CanSelect ? "pending" : "")" @onclick="() => SelectImage(image)" disabled="@(!image.CanSelect)">
-                        @if (!string.IsNullOrEmpty(image.ThumbnailPreview))
-                        {
-                            <img src="@image.ThumbnailPreview" alt="" />
-                        }
-                        else if (image.Status is BatchStatus.Reading or BatchStatus.Decoding or BatchStatus.Detecting or BatchStatus.CreatingPreview)
-                        {
-                            <span class="batch-placeholder batch-spinner" aria-hidden="true"></span>
-                        }
-                        else
-                        {
-                            <span class="batch-placeholder">@(image.Status == BatchStatus.Failed ? "×" : "…")</span>
-                        }
-                        <span class="batch-item-info">
-                            <strong title="@image.FileName">@image.FileName</strong>
-                            <small class="status @GetBatchStatusClass(image)">@GetStatusLabel(image)</small>
-                            @if (!image.IsComplete)
-                            {
-                                <span class="batch-item-progress">
-                                    <span class="batch-progress-track" role="progressbar" aria-label="@($"{image.FileName} progress")" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@image.Progress">
-                                        <span class="batch-progress-fill" style="@GetProgressStyle(image)"></span>
-                                    </span>
-                                    <small>@GetProgressText(image)</small>
-                                </span>
-                            }
-                            @if (!string.IsNullOrEmpty(image.Error))
-                            {
-                                <small class="batch-error">@image.Error</small>
-                            }
-                        </span>
-                        @if (ReferenceEquals(activeImage, image))
-                        {
-                            <span class="selected-mark">✓</span>
-                        }
-                    </button>
+                    <BatchImageItem @key="image.Id"
+                                    Image="image"
+                                    IsSelected="@ReferenceEquals(activeImage, image)"
+                                    OnSelect="SelectImage" />
                 }
             </div>
         }

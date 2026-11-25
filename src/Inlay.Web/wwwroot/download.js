@@ -12,3 +12,11 @@ window.inlay.download = async (fileName, streamReference, contentType = "image/p
     anchor.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
+
+window.inlay.createObjectUrl = (bytes, contentType = "image/png") =>
+    URL.createObjectURL(new Blob([bytes], { type: contentType }));
+
+window.inlay.revokeObjectUrl = url => {
+    if (url)
+        URL.revokeObjectURL(url);
+};
