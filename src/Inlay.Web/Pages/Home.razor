@@ -53,7 +53,7 @@
             <section class="batch-summary">
                 <div class="batch-summary-info">
                     <strong>@CompletedCount / @images.Count finished</strong>
-                    <span>@ReadyCount ready · @ReviewCount to review · @FailedCount failed</span>
+                    <span>@ReadyCount ready · @ReviewCount to review · @RejectedCount rejected · @FailedCount failed</span>
                     <div class="batch-overall-track" role="progressbar" aria-label="Batch completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@BatchProgressPercent">
                         <span style="@BatchProgressStyle"></span>
                     </div>
@@ -190,7 +190,7 @@
                     </div>
                     <div class="editor-heading-actions">
                         <button class="subtle-button" @onclick="UseDetectionBounds" disabled="@(activeImage.Detection?.Best is null)">Reset to detection</button>
-                        <button class="subtle-button" @onclick="DownloadDiagnostics" title="Exports metadata only. The image and filename are never included.">Export diagnostics</button>
+                        <button class="subtle-button" @onclick="DownloadBatchDiagnostics" title="Exports detection metadata for every image. Images and filenames are never included.">Export batch diagnostics</button>
                     </div>
                 </div>
                 <p class="editor-help">Enter exact source-image pixel values, or drag the selection. The crop must stay inside the original image.</p>

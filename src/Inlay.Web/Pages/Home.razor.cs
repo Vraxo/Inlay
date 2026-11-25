@@ -97,7 +97,8 @@ public partial class Home : IDisposable
     }
     private int SuccessfulCount => images.Count(image => image.CropBytes is not null);
     private int ReadyCount => images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status == DetectionStatus.Extracted);
-    private int ReviewCount => images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status != DetectionStatus.Extracted);
+    private int ReviewCount => images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status == DetectionStatus.Review);
+    private int RejectedCount => images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status == DetectionStatus.Rejected);
     private int FailedCount => images.Count(image => image.Status == BatchStatus.Failed);
     private int CompletedCount => images.Count(image => image.IsComplete);
     private int BatchProgressPercent => images.Count == 0 ? 0 : (int)Math.Round(images.Sum(image => image.Progress) / (double)images.Count);
@@ -124,7 +125,9 @@ public partial class Home : IDisposable
             BatchStatus.Detecting => "Detecting",
             BatchStatus.CreatingPreview => "Preparing preview",
             BatchStatus.Completed when image.Detection?.Status == DetectionStatus.Extracted => "Extracted",
-            BatchStatus.Completed when image.Detection?.Best is not null => "Review",
+            BatchStatus.Completed when image.Detection?.Status == DetectionStatus.Review => "Review",
+            BatchStatus.Completed when image.Detection?.Status == DetectionStatus.Rejected && image.Detection.Best is null => "No crop",
+            BatchStatus.Completed when image.Detection?.Status == DetectionStatus.Rejected => "Rejected",
             BatchStatus.Completed => "Manual crop",
             _ => "Queued"
         };
@@ -138,7 +141,13 @@ public partial class Home : IDisposable
         if (image.Status != BatchStatus.Completed)
             return "processing";
 
-        return image.Detection?.Status == DetectionStatus.Extracted ? "success" : "review";
+        return image.Detection?.Status switch
+        {
+            DetectionStatus.Extracted => "success",
+            DetectionStatus.Review => "review",
+            DetectionStatus.Rejected => "rejected",
+            _ => "rejected"
+        };
     }
 
     private static string GetProgressText(BatchImage image) => image.Status switch
@@ -465,53 +474,72 @@ public partial class Home : IDisposable
     private static string CreateDataUrl(byte[] bytes, string contentType) =>
         $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";
 
-    private async Task DownloadDiagnostics()
+    private async Task DownloadBatchDiagnostics()
     {
-        if (activeImage is null)
+        if (images.Count == 0)
             return;
-
-        var detection = activeImage.Detection;
-        var detectedBounds = detection?.Best?.Bounds;
-        var currentRight = cropX + cropWidth;
-        var currentBottom = cropY + cropHeight;
 
         var report = new
         {
-            format = "inlay-diagnostics",
+            format = "inlay-batch-diagnostics",
             version = 1,
-            source = new
+            thresholds = new
             {
-                width = sourceWidth,
-                height = sourceHeight
+                automatic = DetectionResult.AutomaticThreshold,
+                review = DetectionResult.ReviewThreshold
             },
-            detection = new
+            summary = new
             {
-                status = detection?.Status.ToString(),
-                reason = detection?.Reason,
-                automaticThreshold = DetectionResult.AutomaticThreshold,
-                reviewThreshold = DetectionResult.ReviewThreshold,
-                best = CreateCandidateDiagnostics(detection?.Best),
-                second = CreateCandidateDiagnostics(detection?.Second)
+                total = images.Count,
+                ready = ReadyCount,
+                review = ReviewCount,
+                rejected = RejectedCount,
+                failed = FailedCount
             },
-            currentCrop = new
+            images = images.Select((image, index) =>
             {
-                x = cropX,
-                y = cropY,
-                width = cropWidth,
-                height = cropHeight,
-                right = currentRight,
-                bottom = currentBottom,
-                cornerRadius
-            },
-            adjustmentFromDetected = detectedBounds is { } bounds
-                ? new
+                var detection = image.Detection;
+                var detectedBounds = detection?.Best?.Bounds;
+
+                return new
                 {
-                    left = cropX - bounds.X,
-                    top = cropY - bounds.Y,
-                    right = currentRight - bounds.Right,
-                    bottom = currentBottom - bounds.Bottom
-                }
-                : null
+                    index = index + 1,
+                    processingStatus = image.Status.ToString(),
+                    source = image.SourceWidth > 0 && image.SourceHeight > 0
+                        ? new { width = image.SourceWidth, height = image.SourceHeight }
+                        : null,
+                    detection = detection is null
+                        ? null
+                        : new
+                        {
+                            status = detection.Status.ToString(),
+                            reason = detection.Reason,
+                            best = CreateCandidateDiagnostics(detection.Best),
+                            second = CreateCandidateDiagnostics(detection.Second)
+                        },
+                    currentCrop = image.CropWidth > 0 && image.CropHeight > 0
+                        ? new
+                        {
+                            x = image.CropX,
+                            y = image.CropY,
+                            width = image.CropWidth,
+                            height = image.CropHeight,
+                            right = image.CropX + image.CropWidth,
+                            bottom = image.CropY + image.CropHeight,
+                            cornerRadius = image.CornerRadius
+                        }
+                        : null,
+                    adjustmentFromDetected = detectedBounds is { } bounds
+                        ? new
+                        {
+                            left = image.CropX - bounds.X,
+                            top = image.CropY - bounds.Y,
+                            right = image.CropX + image.CropWidth - bounds.Right,
+                            bottom = image.CropY + image.CropHeight - bounds.Bottom
+                        }
+                        : null
+                };
+            }).ToArray()
         };
 
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
@@ -519,7 +547,7 @@ public partial class Home : IDisposable
             WriteIndented = true
         };
         var bytes = JsonSerializer.SerializeToUtf8Bytes(report, options);
-        await Download(bytes, "inlay-diagnostics.json", "application/json");
+        await Download(bytes, "inlay-batch-diagnostics.json", "application/json");
     }
 
     private static object? CreateCandidateDiagnostics(DetectionCandidate? candidate)
