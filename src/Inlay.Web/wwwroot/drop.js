@@ -428,8 +428,8 @@
                     context.restore();
                 }
 
-                // The crop boundary is a one-CSS-pixel line, regardless of image zoom.
-                const edgeWidth = Math.max(1, dpr);
+                // Keep the crop boundary easy to see without letting it grow with image zoom.
+                const edgeWidth = 2.5 * dpr;
                 const edgeOffset = edgeWidth / 2;
                 const snapEdge = value =>
                     Math.round(value * scale - edgeOffset) + edgeOffset;
@@ -439,8 +439,7 @@
                 const edgeBottom = snapEdge(bottom);
 
                 context.save();
-                context.strokeStyle = dark ? "#ff9acb" : "#a82c70";
-                context.lineWidth = edgeWidth;
+                context.lineJoin = "round";
                 context.beginPath();
                 const edgeRadius = Math.min(
                     radius * scale,
@@ -459,6 +458,15 @@
                         edgeTop,
                         edgeRight - edgeLeft,
                         edgeBottom - edgeTop);
+
+                context.strokeStyle = dark
+                    ? "rgba(0,0,0,.95)"
+                    : "rgba(255,255,255,.98)";
+                context.lineWidth = 5 * dpr;
+                context.stroke();
+
+                context.strokeStyle = dark ? "#ff9acb" : "#a82c70";
+                context.lineWidth = edgeWidth;
                 context.stroke();
                 context.restore();
             };
