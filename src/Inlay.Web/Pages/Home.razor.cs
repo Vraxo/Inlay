@@ -341,8 +341,6 @@ public partial class Home : IAsyncDisposable
 
             if (activeImage is null)
                 await SelectImage(image);
-
-            await RefreshBatchAsync();
         }
         catch (Exception exception)
         {
@@ -351,7 +349,6 @@ public partial class Home : IAsyncDisposable
             image.CropBytes = null;
             image.SourcePreview = "";
             image.ThumbnailPreview = "";
-            await RefreshBatchAsync();
         }
     }
 
