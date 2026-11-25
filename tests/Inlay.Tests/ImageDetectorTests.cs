@@ -8,6 +8,29 @@ namespace Inlay.Tests;
 public sealed class ImageDetectorTests
 {
     [Fact]
+    public async Task AsyncDetectionReportsProgressAndYieldsToTheCaller()
+    {
+        using var image = new Mat(400, 300, MatType.CV_8UC3, new Scalar(90, 90, 90));
+        var progress = new List<int>();
+        var yieldCount = 0;
+
+        var result = await new ImageDetector().DetectAsync(
+            image,
+            progress.Add,
+            () =>
+            {
+                yieldCount++;
+                return Task.CompletedTask;
+            });
+
+        Assert.Equal(DetectionStatus.Rejected, result.Status);
+        Assert.NotEmpty(progress);
+        Assert.True(progress.Count >= 5);
+        Assert.Equal(progress.OrderBy(value => value), progress);
+        Assert.True(yieldCount >= progress.Count);
+    }
+
+    [Fact]
     public void FlatScreenshotExplainsWhyNoCandidateWasFound()
     {
         using var image = new Mat(400, 300, MatType.CV_8UC3, new Scalar(90, 90, 90));

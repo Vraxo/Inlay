@@ -7,11 +7,17 @@ public sealed class ImageDetector
     private const int MaximumAnalysisDimension = 1600;
     private const int SquareCornerHorizontalInset = 3;
 
-    public DetectionResult Detect(Mat source)
+    public DetectionResult Detect(Mat source) => DetectAsync(source).GetAwaiter().GetResult();
+
+    public async Task<DetectionResult> DetectAsync(
+        Mat source,
+        Action<int>? reportProgress = null,
+        Func<Task>? yieldToBrowser = null)
     {
         if (source.Empty() || source.Width < 80 || source.Height < 80)
             return new DetectionResult(DetectionStatus.Rejected, null, null, "Image is empty or too small.");
 
+        await ReportProgress(2, reportProgress, yieldToBrowser);
         var scale = Math.Min(1.0, (double)MaximumAnalysisDimension / Math.Max(source.Width, source.Height));
         using var analysis = new Mat();
         if (scale < 1.0)
@@ -30,13 +36,20 @@ public sealed class ImageDetector
         using var focusMap = new Mat();
         using var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(5, 5));
 
+        await ReportProgress(5, reportProgress, yieldToBrowser);
         Cv2.CvtColor(analysis, gray, ColorConversionCodes.BGR2GRAY);
+        await ReportProgress(8, reportProgress, yieldToBrowser);
         Cv2.GaussianBlur(gray, blurred, new Size(3, 3), 0);
+        await ReportProgress(11, reportProgress, yieldToBrowser);
         Cv2.Canny(blurred, strongEdges, 55, 145);
+        await ReportProgress(14, reportProgress, yieldToBrowser);
         Cv2.Canny(blurred, softEdges, 25, 75);
+        await ReportProgress(16, reportProgress, yieldToBrowser);
         Cv2.BitwiseOr(strongEdges, softEdges, edges);
         Cv2.MorphologyEx(edges, closed, MorphTypes.Close, kernel);
+        await ReportProgress(18, reportProgress, yieldToBrowser);
         FocusRegionDetector.CreateFocusMap(gray, focusMap);
+        await ReportProgress(28, reportProgress, yieldToBrowser);
 
         Cv2.FindContours(closed, out Point[][] contours, out _, RetrievalModes.List, ContourApproximationModes.ApproxSimple);
         var candidates = new List<RankedCandidate>();
@@ -44,8 +57,14 @@ public sealed class ImageDetector
         var rejectedByAspectRatio = 0;
         var rejectedByAreaRatio = 0;
 
+        var contourIndex = 0;
         foreach (var contour in contours)
         {
+            if ((contourIndex++ & 7) == 0)
+            {
+                reportProgress?.Invoke(28 + Math.Min(12, contourIndex * 12 / Math.Max(1, contours.Length)));
+                await YieldToBrowser(yieldToBrowser);
+            }
             var bounds = Cv2.BoundingRect(contour);
             if (!HasCandidateSize(bounds, analysis.Width, analysis.Height))
             {
@@ -69,15 +88,29 @@ public sealed class ImageDetector
                 analysis.Width, analysis.Height, ref rejectedByAreaRatio);
         }
 
-        var focusCandidates = FocusRegionDetector.FindCandidates(focusMap);
+        await ReportProgress(42, reportProgress, yieldToBrowser);
+        var focusCandidates = await FocusRegionDetector.FindCandidatesAsync(focusMap, yieldToBrowser);
+        await ReportProgress(52, reportProgress, yieldToBrowser);
+        var focusCandidateIndex = 0;
         foreach (var bounds in focusCandidates)
+        {
+            if ((focusCandidateIndex++ & 3) == 0)
+                await YieldToBrowser(yieldToBrowser);
             AddCandidate(candidates, edges, gray, focusMap, bounds, 0, true, scale,
                 analysis.Width, analysis.Height, ref rejectedByAreaRatio);
+        }
 
-        var rectangleCandidates = CenteredRectangleDetector.FindCandidates(focusMap, edges);
+        var rectangleCandidates = await CenteredRectangleDetector.FindCandidatesAsync(focusMap, edges, yieldToBrowser,
+            progress => reportProgress?.Invoke(52 + progress * 18 / 100));
+        await ReportProgress(70, reportProgress, yieldToBrowser);
+        var rectangleCandidateIndex = 0;
         foreach (var bounds in rectangleCandidates)
+        {
+            if ((rectangleCandidateIndex++ & 3) == 0)
+                await YieldToBrowser(yieldToBrowser);
             AddCandidate(candidates, edges, gray, focusMap, bounds, 0, true, scale,
                 analysis.Width, analysis.Height, ref rejectedByAreaRatio);
+        }
 
         var ranked = candidates.OrderByDescending(candidate => candidate.Result.Confidence).ToArray();
         if (ranked.Length == 0)
@@ -120,17 +153,27 @@ public sealed class ImageDetector
         using var sourceSoftEdges = new Mat();
         using var sourceEdges = new Mat();
         using var sourceFocusMap = new Mat();
+        await ReportProgress(78, reportProgress, yieldToBrowser);
         Cv2.CvtColor(source, sourceGray, ColorConversionCodes.BGR2GRAY);
+        await ReportProgress(80, reportProgress, yieldToBrowser);
         Cv2.GaussianBlur(sourceGray, sourceBlurred, new Size(3, 3), 0);
+        await ReportProgress(82, reportProgress, yieldToBrowser);
         Cv2.Canny(sourceBlurred, sourceStrongEdges, 55, 145);
+        await ReportProgress(84, reportProgress, yieldToBrowser);
         Cv2.Canny(sourceBlurred, sourceSoftEdges, 25, 75);
+        await ReportProgress(86, reportProgress, yieldToBrowser);
         Cv2.BitwiseOr(sourceStrongEdges, sourceSoftEdges, sourceEdges);
+        await ReportProgress(88, reportProgress, yieldToBrowser);
         FocusRegionDetector.CreateFocusMap(sourceGray, sourceFocusMap);
+        await ReportProgress(90, reportProgress, yieldToBrowser);
         var finalCornerRadius = 0;
         if (hasUsableBoundaries)
         {
+            await YieldToBrowser(yieldToBrowser);
             finalBounds = CropRefiner.RefineTopBoundary(sourceEdges, sourceFocusMap, finalBounds, 120);
+            await ReportProgress(92, reportProgress, yieldToBrowser);
             finalBounds = CropRefiner.RefineBottomBoundary(sourceEdges, finalBounds, 120);
+            await ReportProgress(94, reportProgress, yieldToBrowser);
             finalCornerRadius = CornerRadiusEstimator.EstimateCornerRadius(sourceEdges, finalBounds);
         }
 
@@ -146,6 +189,7 @@ public sealed class ImageDetector
                 finalBounds.Height);
         }
 
+        await ReportProgress(96, reportProgress, yieldToBrowser);
         var finalCornerFit = finalCornerRadius > 0 ? 0.85 : 0.65;
         var finalBoundary = CandidateScorer.MeasureBoundaryContinuity(edges, refinedAnalysisBounds);
         var finalEdgeStrength = CandidateScorer.MeasureEdgeStrength(gray, refinedAnalysisBounds);
@@ -255,6 +299,15 @@ public sealed class ImageDetector
                cornerFit * 0.046 +
                centerPreference * 0.08;
     }
+
+    private static Task ReportProgress(int progress, Action<int>? reportProgress, Func<Task>? yieldToBrowser)
+    {
+        reportProgress?.Invoke(progress);
+        return YieldToBrowser(yieldToBrowser);
+    }
+
+    private static Task YieldToBrowser(Func<Task>? yieldToBrowser) =>
+        yieldToBrowser?.Invoke() ?? Task.CompletedTask;
 
     private sealed record RankedCandidate(DetectionCandidate Result, bool FromFocusMap);
 }

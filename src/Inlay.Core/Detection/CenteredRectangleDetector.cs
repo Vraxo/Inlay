@@ -8,7 +8,14 @@ internal static class CenteredRectangleDetector
     private const int MaximumCandidates = 60;
     private const int MaximumCandidatesPerAreaBand = 5;
 
-    internal static IReadOnlyList<Rect> FindCandidates(Mat focusMap, Mat edges)
+    internal static IReadOnlyList<Rect> FindCandidates(Mat focusMap, Mat edges) =>
+        FindCandidatesAsync(focusMap, edges).GetAwaiter().GetResult();
+
+    internal static async Task<IReadOnlyList<Rect>> FindCandidatesAsync(
+        Mat focusMap,
+        Mat edges,
+        Func<Task>? yieldToBrowser = null,
+        Action<int>? reportProgress = null)
     {
         var scale = Math.Min(1.0, (double)MaximumSearchDimension / Math.Max(focusMap.Width, focusMap.Height));
         using var focus = new Mat();
@@ -36,6 +43,7 @@ internal static class CenteredRectangleDetector
         var heightRatios = Enumerable.Range(5, 15).Select(value => value * 0.05);
         var offsets = new[] { -0.10, -0.05, 0.0, 0.05, 0.10 };
 
+        var evaluatedCandidates = 0;
         foreach (var widthRatio in widthRatios)
         {
             var width = (int)Math.Round(focus.Width * widthRatio);
@@ -51,6 +59,14 @@ internal static class CenteredRectangleDetector
                 {
                     foreach (var offsetX in offsets)
                     {
+                        evaluatedCandidates++;
+                        if (evaluatedCandidates % 128 == 0)
+                        {
+                            reportProgress?.Invoke(Math.Min(100, evaluatedCandidates * 100 / 5250));
+                            if (yieldToBrowser is not null)
+                                await yieldToBrowser();
+                        }
+
                         var centerX = focus.Width / 2.0 + offsetX * focus.Width;
                         var centerY = focus.Height / 2.0 + offsetY * focus.Height;
                         var bounds = new Rect(
@@ -105,6 +121,7 @@ internal static class CenteredRectangleDetector
             AddDistinctResult(results, candidate.Bounds, scale);
         }
 
+        reportProgress?.Invoke(100);
         return results;
     }
 

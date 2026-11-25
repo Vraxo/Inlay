@@ -100,7 +100,7 @@ public partial class Home : IDisposable
     private int ReviewCount => images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status != DetectionStatus.Extracted);
     private int FailedCount => images.Count(image => image.Status == BatchStatus.Failed);
     private int CompletedCount => images.Count(image => image.IsComplete);
-    private int BatchProgressPercent => images.Count == 0 ? 0 : (int)Math.Round(CompletedCount * 100d / images.Count);
+    private int BatchProgressPercent => images.Count == 0 ? 0 : (int)Math.Round(images.Sum(image => image.Progress) / (double)images.Count);
     private string BatchProgressStyle => $"width: {BatchProgressPercent}%";
     private bool HasResults => images.Count > 0;
 
@@ -120,6 +120,7 @@ public partial class Home : IDisposable
         {
             BatchStatus.Queued => "Queued",
             BatchStatus.Reading => "Reading",
+            BatchStatus.Decoding => "Decoding image",
             BatchStatus.Detecting => "Detecting",
             BatchStatus.CreatingPreview => "Preparing preview",
             BatchStatus.Completed when image.Detection?.Status == DetectionStatus.Extracted => "Extracted",
@@ -143,8 +144,9 @@ public partial class Home : IDisposable
     private static string GetProgressText(BatchImage image) => image.Status switch
     {
         BatchStatus.Queued => "Waiting",
-        BatchStatus.Reading => $"Reading file · {image.Progress}%",
-        BatchStatus.Detecting => "Detecting image",
+        BatchStatus.Reading => $"Reading file · {Math.Clamp((int)Math.Round(image.Progress / 15d * 100), 0, 100)}%",
+        BatchStatus.Decoding => "Decoding image",
+        BatchStatus.Detecting => $"Finding image · {Math.Clamp((int)Math.Round((image.Progress - 15) / 65d * 100), 0, 100)}%",
         BatchStatus.CreatingPreview => "Creating preview",
         BatchStatus.Completed => GetStatusLabel(image),
         BatchStatus.Failed => image.Error,
@@ -152,7 +154,7 @@ public partial class Home : IDisposable
     };
 
     private static string GetProgressStyle(BatchImage image) =>
-        $"width: {(image.IsIndeterminate ? 34 : image.Progress)}%";
+        $"width: {image.Progress}%";
 
     private async Task LoadImages(InputFileChangeEventArgs args)
     {
@@ -242,8 +244,8 @@ public partial class Home : IDisposable
                     var progress = file.Size == 0 ? 100 : (int)(memory.Length * 100L / file.Size);
                     if (progress >= nextProgressUpdate || progress == 100)
                     {
-                        image.Progress = Math.Clamp(progress, 0, 100);
-                        nextProgressUpdate = image.Progress + 5;
+                        image.Progress = Math.Clamp(progress * 15 / 100, 0, 15);
+                        nextProgressUpdate = progress + 5;
                         await RefreshBatchAsync();
                     }
                 }
@@ -253,8 +255,8 @@ public partial class Home : IDisposable
 
             image.SourceBytes = sourceBytes;
             image.SourceContentType = file.ContentType;
-            image.Status = BatchStatus.Detecting;
-            image.IsIndeterminate = true;
+            image.Status = BatchStatus.Decoding;
+            image.Progress = 15;
             await RefreshBatchAsync();
 
             using (var source = Cv2.ImDecode(image.SourceBytes, ImreadModes.Color))
@@ -264,7 +266,13 @@ public partial class Home : IDisposable
 
                 image.SourceWidth = source.Width;
                 image.SourceHeight = source.Height;
-                image.Detection = detector.Detect(source);
+                image.Status = BatchStatus.Detecting;
+                image.Progress = 18;
+                await RefreshBatchAsync();
+                image.Detection = await detector.DetectAsync(
+                    source,
+                    progress => image.Progress = 18 + progress * 62 / 100,
+                    RefreshBatchAsync);
 
                 if (image.Detection.Best is not null)
                 {
@@ -282,13 +290,15 @@ public partial class Home : IDisposable
             }
 
             image.Status = BatchStatus.CreatingPreview;
+            image.Progress = 84;
             await RefreshBatchAsync();
 
             image.CropBytes = CreateCrop(image, image.CropX, image.CropY, image.CropWidth, image.CropHeight, image.CornerRadius);
+            image.Progress = 94;
+            await RefreshBatchAsync();
             image.ThumbnailPreview = CreateThumbnail(image.CropBytes);
             image.Status = BatchStatus.Completed;
             image.Progress = 100;
-            image.IsIndeterminate = false;
 
             if (activeImage is null)
                 SelectImage(image);
@@ -311,14 +321,16 @@ public partial class Home : IDisposable
         image.Error = message;
         image.Status = BatchStatus.Failed;
         image.Progress = 100;
-        image.IsIndeterminate = false;
     }
 
     private async Task RefreshBatchAsync()
     {
         await InvokeAsync(StateHasChanged);
-        await Task.Yield();
+        await YieldToBrowserAsync();
     }
+
+    private Task YieldToBrowserAsync() =>
+        JS.InvokeVoidAsync("inlay.yieldToBrowser").AsTask();
 
     private void SelectImage(BatchImage image)
     {
@@ -587,6 +599,7 @@ public partial class Home : IDisposable
     {
         Queued,
         Reading,
+        Decoding,
         Detecting,
         CreatingPreview,
         Completed,
@@ -610,7 +623,6 @@ public partial class Home : IDisposable
         public int CropHeight { get; set; }
         public int CornerRadius { get; set; }
         public int Progress { get; set; }
-        public bool IsIndeterminate { get; set; }
         public BatchStatus Status { get; set; } = BatchStatus.Queued;
         public bool IsComplete => Status is BatchStatus.Completed or BatchStatus.Failed;
         public bool CanSelect => Status == BatchStatus.Completed && SourceBytes is not null && SourceWidth > 0 && SourceHeight > 0;
