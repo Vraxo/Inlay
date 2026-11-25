@@ -1254,8 +1254,10 @@ html[data-theme="dark"] .crop-handle {
 .batch-overall-track > span,
 .batch-progress-fill {
     display: block;
+    width: 0;
     height: 100%;
     border-radius: inherit;
+    background: var(--brand-gradient);
     transition: width .18s ease;
 }
 .batch-overall-track {
@@ -1281,7 +1283,7 @@ html[data-theme="dark"] .crop-handle {
     line-height: 1.3;
 }
 .batch-progress-track {
-    height: 3px;
+    height: 5px;
 }
 .batch-progress-fill.indeterminate {
     width: 34%;
