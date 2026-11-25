@@ -1551,3 +1551,36 @@ html[data-theme="dark"] .crop-zoom-presets button[aria-pressed="true"] {
 .crop-selection {
     z-index: 2;
 }
+
+
+/* Match primary actions to the restrained GitHub link treatment. */
+.download,
+.apply {
+    border: 1px solid #e5e5e5;
+    background: #fff;
+    color: #454545;
+    filter: none;
+    transition: border-color .15s, background .15s, color .15s;
+}
+
+.download:hover:not(:disabled),
+.apply:hover:not(:disabled) {
+    border-color: transparent;
+    background: linear-gradient(#fff, #fff) padding-box, var(--brand-gradient) border-box;
+    color: #262626;
+    filter: none;
+}
+
+html[data-theme="dark"] .shell .download,
+html[data-theme="dark"] .shell .apply {
+    border-color: #414141;
+    background: #292929;
+    color: #f5f5f5;
+}
+
+html[data-theme="dark"] .shell .download:hover:not(:disabled),
+html[data-theme="dark"] .shell .apply:hover:not(:disabled) {
+    border-color: transparent;
+    background: linear-gradient(#292929, #292929) padding-box, var(--brand-gradient-hover) border-box;
+    color: #fff;
+}
