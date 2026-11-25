@@ -90,16 +90,26 @@ public sealed class ImageDetector
         await ReportProgress(42, reportProgress, yieldToBrowser);
         var focusCandidates = await FocusRegionDetector.FindCandidatesAsync(focusMap, yieldToBrowser);
         await ReportProgress(52, reportProgress, yieldToBrowser);
+        var focusCandidateIndex = 0;
         foreach (var bounds in focusCandidates)
+        {
+            if ((focusCandidateIndex++ & 3) == 0)
+                await YieldToBrowser(yieldToBrowser);
             AddCandidate(candidates, edges, gray, focusMap, bounds, 0, true, scale,
                 analysis.Width, analysis.Height, ref rejectedByAreaRatio);
+        }
 
         var rectangleCandidates = await CenteredRectangleDetector.FindCandidatesAsync(focusMap, edges, yieldToBrowser,
             progress => reportProgress?.Invoke(52 + progress * 18 / 100));
         await ReportProgress(70, reportProgress, yieldToBrowser);
+        var rectangleCandidateIndex = 0;
         foreach (var bounds in rectangleCandidates)
+        {
+            if ((rectangleCandidateIndex++ & 3) == 0)
+                await YieldToBrowser(yieldToBrowser);
             AddCandidate(candidates, edges, gray, focusMap, bounds, 0, true, scale,
                 analysis.Width, analysis.Height, ref rejectedByAreaRatio);
+        }
 
         var ranked = candidates.OrderByDescending(candidate => candidate.Result.Confidence).ToArray();
         if (ranked.Length == 0)
