@@ -128,12 +128,10 @@ public partial class Home : IAsyncDisposable
     {
         isDarkTheme = await JS.InvokeAsync<bool>("inlay.toggleTheme");
     }
-    private int SuccessfulCount => images.Count(image => image.CropBytes is not null);
     private int ReadyCount => images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status == DetectionStatus.Extracted);
     private int ReviewCount => images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status == DetectionStatus.Review);
     private int RejectedCount => images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status == DetectionStatus.Rejected);
     private int FailedCount => images.Count(image => image.Status == BatchStatus.Failed);
-    private int CompletedCount => images.Count(image => image.IsComplete);
     private bool HasResults => images.Count > 0;
 
     private static string GetStatusClass(DetectionResult? result) => result?.Status switch
@@ -142,6 +140,27 @@ public partial class Home : IAsyncDisposable
         DetectionStatus.Review => "review",
         _ => "rejected"
     };
+
+    private static string GetStatusLabel(BatchImage image)
+    {
+        if (image.Status == BatchStatus.Failed)
+            return "Failed";
+
+        return image.Status switch
+        {
+            BatchStatus.Queued => "Queued",
+            BatchStatus.Reading => "Reading",
+            BatchStatus.Decoding => "Decoding image",
+            BatchStatus.Detecting => "Finding image",
+            BatchStatus.CreatingPreview => "Preparing preview",
+            BatchStatus.Completed when image.Detection?.Status == DetectionStatus.Extracted => "Extracted",
+            BatchStatus.Completed when image.Detection?.Status == DetectionStatus.Review => "Review",
+            BatchStatus.Completed when image.Detection is { Status: DetectionStatus.Rejected, Best: null } => "No crop",
+            BatchStatus.Completed when image.Detection?.Status == DetectionStatus.Rejected => "Rejected",
+            BatchStatus.Completed => "Manual crop",
+            _ => "Queued"
+        };
+    }
 
     private async Task LoadImages(InputFileChangeEventArgs args)
     {
@@ -677,29 +696,4 @@ public partial class Home : IAsyncDisposable
         WorkerMetadata Metadata,
         byte[] CropBytes,
         byte[] ThumbnailBytes);
-}
-}
-
-    private sealed class BatchImage
-    {
-        public string FileName { get; init; } = "";
-        public string Error { get; set; } = "";
-        public byte[]? SourceBytes { get; set; }
-        public byte[]? CropBytes { get; set; }
-        public string SourceContentType { get; set; } = "image/png";
-        public string SourcePreview { get; set; } = "";
-        public string ThumbnailPreview { get; set; } = "";
-        public int SourceWidth { get; set; }
-        public int SourceHeight { get; set; }
-        public int CropX { get; set; }
-        public int CropY { get; set; }
-        public int CropWidth { get; set; }
-        public int CropHeight { get; set; }
-        public int CornerRadius { get; set; }
-        public int Progress { get; set; }
-        public BatchStatus Status { get; set; } = BatchStatus.Queued;
-        public bool IsComplete => Status is BatchStatus.Completed or BatchStatus.Failed;
-        public bool CanSelect => Status == BatchStatus.Completed && SourceBytes is not null && SourceWidth > 0 && SourceHeight > 0;
-        public DetectionResult? Detection { get; set; }
-    }
 }

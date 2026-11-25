@@ -49,7 +49,15 @@ function createWorker() {
         }, 60000);
 
         worker.addEventListener("message", event => {
-            const message = event.data;
+            let message = event.data;
+            if (typeof message === "string") {
+                try {
+                    message = JSON.parse(message);
+                }
+                catch {
+                    return;
+                }
+            }
 
             if (message.type === "ready") {
                 if (slot.ready)
