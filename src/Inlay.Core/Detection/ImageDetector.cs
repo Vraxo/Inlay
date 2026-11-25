@@ -37,9 +37,13 @@ public sealed class ImageDetector
 
         await ReportProgress(5, reportProgress, yieldToBrowser);
         Cv2.CvtColor(analysis, gray, ColorConversionCodes.BGR2GRAY);
+        await ReportProgress(8, reportProgress, yieldToBrowser);
         Cv2.GaussianBlur(gray, blurred, new Size(3, 3), 0);
+        await ReportProgress(11, reportProgress, yieldToBrowser);
         Cv2.Canny(blurred, strongEdges, 55, 145);
+        await ReportProgress(14, reportProgress, yieldToBrowser);
         Cv2.Canny(blurred, softEdges, 25, 75);
+        await ReportProgress(16, reportProgress, yieldToBrowser);
         Cv2.BitwiseOr(strongEdges, softEdges, edges);
         Cv2.MorphologyEx(edges, closed, MorphTypes.Close, kernel);
         await ReportProgress(18, reportProgress, yieldToBrowser);
@@ -56,7 +60,10 @@ public sealed class ImageDetector
         foreach (var contour in contours)
         {
             if ((contourIndex++ & 7) == 0)
+            {
+                reportProgress?.Invoke(28 + Math.Min(12, contourIndex * 12 / Math.Max(1, contours.Length)));
                 await YieldToBrowser(yieldToBrowser);
+            }
             var bounds = Cv2.BoundingRect(contour);
             if (!HasCandidateSize(bounds, analysis.Width, analysis.Height))
             {
@@ -81,13 +88,14 @@ public sealed class ImageDetector
         }
 
         await ReportProgress(42, reportProgress, yieldToBrowser);
-        var focusCandidates = FocusRegionDetector.FindCandidates(focusMap);
+        var focusCandidates = await FocusRegionDetector.FindCandidatesAsync(focusMap, yieldToBrowser);
         await ReportProgress(52, reportProgress, yieldToBrowser);
         foreach (var bounds in focusCandidates)
             AddCandidate(candidates, edges, gray, focusMap, bounds, 0, true, scale,
                 analysis.Width, analysis.Height, ref rejectedByAreaRatio);
 
-        var rectangleCandidates = await CenteredRectangleDetector.FindCandidatesAsync(focusMap, edges, yieldToBrowser);
+        var rectangleCandidates = await CenteredRectangleDetector.FindCandidatesAsync(focusMap, edges, yieldToBrowser,
+            progress => reportProgress?.Invoke(52 + progress * 18 / 100));
         await ReportProgress(70, reportProgress, yieldToBrowser);
         foreach (var bounds in rectangleCandidates)
             AddCandidate(candidates, edges, gray, focusMap, bounds, 0, true, scale,
@@ -136,18 +144,25 @@ public sealed class ImageDetector
         using var sourceFocusMap = new Mat();
         await ReportProgress(78, reportProgress, yieldToBrowser);
         Cv2.CvtColor(source, sourceGray, ColorConversionCodes.BGR2GRAY);
+        await ReportProgress(80, reportProgress, yieldToBrowser);
         Cv2.GaussianBlur(sourceGray, sourceBlurred, new Size(3, 3), 0);
+        await ReportProgress(82, reportProgress, yieldToBrowser);
         Cv2.Canny(sourceBlurred, sourceStrongEdges, 55, 145);
+        await ReportProgress(84, reportProgress, yieldToBrowser);
         Cv2.Canny(sourceBlurred, sourceSoftEdges, 25, 75);
+        await ReportProgress(86, reportProgress, yieldToBrowser);
         Cv2.BitwiseOr(sourceStrongEdges, sourceSoftEdges, sourceEdges);
-        FocusRegionDetector.CreateFocusMap(sourceGray, sourceFocusMap);
         await ReportProgress(88, reportProgress, yieldToBrowser);
+        FocusRegionDetector.CreateFocusMap(sourceGray, sourceFocusMap);
+        await ReportProgress(90, reportProgress, yieldToBrowser);
         var finalCornerRadius = 0;
         if (hasUsableBoundaries)
         {
             await YieldToBrowser(yieldToBrowser);
             finalBounds = CropRefiner.RefineTopBoundary(sourceEdges, sourceFocusMap, finalBounds, 120);
+            await ReportProgress(92, reportProgress, yieldToBrowser);
             finalBounds = CropRefiner.RefineBottomBoundary(sourceEdges, finalBounds, 120);
+            await ReportProgress(94, reportProgress, yieldToBrowser);
             finalCornerRadius = CornerRadiusEstimator.EstimateCornerRadius(sourceEdges, finalBounds);
         }
 
