@@ -100,7 +100,7 @@ public partial class Home : IDisposable
     private int ReviewCount => images.Count(image => image.Status == BatchStatus.Completed && image.Detection?.Status != DetectionStatus.Extracted);
     private int FailedCount => images.Count(image => image.Status == BatchStatus.Failed);
     private int CompletedCount => images.Count(image => image.IsComplete);
-    private int BatchProgressPercent => images.Count == 0 ? 0 : (int)Math.Round(CompletedCount * 100d / images.Count);
+    private int BatchProgressPercent => images.Count == 0 ? 0 : (int)Math.Round(images.Sum(image => image.Progress) / (double)images.Count);
     private string BatchProgressStyle => $"width: {BatchProgressPercent}%";
     private bool HasResults => images.Count > 0;
 
