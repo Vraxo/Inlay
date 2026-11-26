@@ -68,7 +68,12 @@ internal static class CandidateScorer
         var right = MeasureBestSideCoverage(edges, rect, thickness, tolerance, false, false);
         var horizontal = (top + bottom) * 0.5;
         var vertical = (left + right) * 0.5;
-        return Math.Clamp((horizontal + vertical) * 0.5 * 2.2, 0, 1);
+
+        // A continuous Canny contour is normally about one pixel wide.
+        // Normalize against that expected coverage instead of an arbitrary
+        // multiplier that caps a perfect 1px boundary below full confidence.
+        var meanCoverage = (horizontal + vertical) * 0.5;
+        return Math.Clamp(meanCoverage * thickness, 0, 1);
     }
 
     internal static double MeasureBoundaryContrast(Mat gray, Rect rect)
@@ -83,7 +88,8 @@ internal static class CandidateScorer
 
         // Require contrast on every side so a single strong edge cannot
         // make an unrelated rectangle appear reliable.
-        return Math.Clamp(Math.Min(Math.Min(top, bottom), Math.Min(left, right)) / 64.0, 0, 1);
+        // A 40-level grayscale transition is already a strong, visible edge.
+        return Math.Clamp(Math.Min(Math.Min(top, bottom), Math.Min(left, right)) / 40.0, 0, 1);
     }
 
     private static double MeasureBestSideCoverage(
@@ -178,6 +184,46 @@ internal static class CandidateScorer
         rect.Y >= 0 &&
         rect.Right <= image.Width &&
         rect.Bottom <= image.Height;
+
+    internal static double MeasureBackdropSeparation(Mat focusMap, Rect rect)
+    {
+        rect = DetectionGeometry.ClampRect(rect, focusMap.Width, focusMap.Height);
+        var insetX = Math.Max(1, rect.Width / 10);
+        var insetY = Math.Max(1, rect.Height / 10);
+        var inner = DetectionGeometry.ClampRect(
+            new Rect(rect.X + insetX, rect.Y + insetY,
+                Math.Max(1, rect.Width - insetX * 2),
+                Math.Max(1, rect.Height - insetY * 2)),
+            focusMap.Width,
+            focusMap.Height);
+
+        var innerSharpness = Mean(focusMap, inner);
+        if (innerSharpness < 4.0)
+            return 0;
+
+        // Ignore the immediate edge halo. It contains the card border itself,
+        // which is sharp even when the surrounding backdrop is heavily blurred.
+        var dimension = Math.Min(rect.Width, rect.Height);
+        var guard = Math.Max(2, dimension / 80);
+        var margin = Math.Max(guard + 8, dimension / 8);
+        var guardedBounds = DetectionGeometry.ClampRect(
+            new Rect(rect.X - guard, rect.Y - guard,
+                rect.Width + guard * 2, rect.Height + guard * 2),
+            focusMap.Width,
+            focusMap.Height);
+        var outer = DetectionGeometry.ClampRect(
+            new Rect(rect.X - margin, rect.Y - margin,
+                rect.Width + margin * 2, rect.Height + margin * 2),
+            focusMap.Width,
+            focusMap.Height);
+
+        var surroundingSharpness = MeasureOutsideMean(focusMap, guardedBounds, outer);
+        var ratio = innerSharpness / Math.Max(2.0, surroundingSharpness);
+
+        // A fourfold focus difference is strong evidence for a foreground
+        // image over a softened/blurred backdrop.
+        return Math.Clamp(Math.Log2(Math.Max(1.0, ratio)) / 2.0, 0, 1);
+    }
 
     internal static double MeasureEdgeStrength(Mat gray, Rect rect)
     {
