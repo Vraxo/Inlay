@@ -93,6 +93,9 @@ jobs:
       - name: Fetch native GGUF runtime
         run: git clone --recurse-submodules https://github.com/Asher-1/sam3-ggml.git native-sam3
       - name: Configure CPU build
-        run: cmake -S native-sam3 -B native-sam3/build -G "Visual Studio 17 2022" -A x64 -DSAM3_CUDA=OFF -DSAM3_METAL=OFF -DSAM3_BUILD_EXAMPLES=ON
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:ProgramFiles\Git\bin;$env:PATH"
+          cmake -S native-sam3 -B native-sam3/build -G "Visual Studio 17 2022" -A x64 -DSAM3_CUDA=OFF -DSAM3_METAL=OFF -DSAM3_BUILD_EXAMPLES=ON
       - name: Compile offline segmentation CLI
         run: cmake --build native-sam3/build --config Release --target sam3_vis --parallel 2
