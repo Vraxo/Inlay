@@ -6,7 +6,7 @@ This is an isolated experiment. It does not replace or modify the existing .NET 
 
 ## 1. Checkpoint access (one-time)
 
-1. Request access to the official [Meta SAM 3 Hugging Face model](https://huggingface.co/facebook/sam3).
+1. Request access to the official [Meta SAM 3 Hugging Face model](https://huggingface.co/facebook/sam3.1).
 2. Accept the model terms and wait for access approval.
 3. Create a Hugging Face access token with read permission.
 
@@ -27,7 +27,7 @@ Authenticate after access is approved:
 .\.venv\Scripts\hf.exe auth login
 ```
 
-The installer uses the official CUDA-enabled PyTorch wheel index and Meta's current SAM 3 repository. Meta documents Python 3.12+, PyTorch 2.7+, and CUDA 12.6+ as prerequisites. Native Windows support is not explicitly guaranteed by the upstream project; this first install is also a compatibility test. If a native Windows dependency fails, the fallback is WSL2 rather than changing the model or adding a remote service.
+The installer uses the official CUDA-enabled PyTorch wheel index and Meta's current SAM 3 repository and the SAM 3.1 checkpoint from the separate facebook/sam3.1 model repository. Meta documents Python 3.12+, PyTorch 2.7+, and CUDA 12.6+ as prerequisites. Native Windows support is not explicitly guaranteed by the upstream project; this first install is also a compatibility test. If a native Windows dependency fails, the fallback is WSL2 rather than changing the model or adding a remote service.
 
 ## 3. Run
 
