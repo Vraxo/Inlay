@@ -91,7 +91,7 @@ py -3.12 -m pip install -r requirements.txt
 py -3.12 -m pytest
 ```
 
-The PowerShell setup and runner scripts are syntax-checked in Windows CI. The native CUDA build still needs to be validated on a Windows machine with the prerequisites above.
+The PowerShell setup and runner scripts are syntax-checked in Windows CI. CI also compiles the native SAM 3 CLI with the Windows MSVC toolchain (CPU backend); the CUDA-enabled build still needs to be validated on a Windows machine with the prerequisites above.
 
 ## Important interpretation
 
