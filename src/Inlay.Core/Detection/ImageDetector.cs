@@ -195,11 +195,18 @@ public sealed class ImageDetector
         var finalEdgeStrength = CandidateScorer.MeasureEdgeStrength(gray, refinedAnalysisBounds);
         var finalGeometry = CandidateScorer.MeasureTolerantRectangleGeometry(edges, refinedAnalysisBounds);
         var finalSharpness = CandidateScorer.MeasureSharpnessContrast(focusMap, refinedAnalysisBounds);
+        var finalBackdropSeparation = CandidateScorer.MeasureBackdropSeparation(focusMap, refinedAnalysisBounds);
         var finalBoundaryContrast = CandidateScorer.MeasureBoundaryContrast(gray, refinedAnalysisBounds);
-        var finalConfidence = ScoreFinalCandidate(
+        var conventionalConfidence = ScoreFinalCandidate(
             finalBoundary, finalEdgeStrength, finalGeometry, finalSharpness, finalCornerFit,
             finalBoundaryContrast, bestMatch.FromFocusMap,
             refinedAnalysisBounds, analysis.Width, analysis.Height);
+        var foregroundCardConfidence = ScoreForegroundCardCandidate(
+            refinedAnalysisBounds, analysis.Width, analysis.Height,
+            finalBoundary, finalGeometry, finalBoundaryContrast, finalBackdropSeparation, finalCornerFit);
+        var finalConfidence = Math.Max(conventionalConfidence, foregroundCardConfidence ?? 0);
+        var recognizedForegroundCard = foregroundCardConfidence is not null &&
+                                       foregroundCardConfidence >= conventionalConfidence;
 
         best = best with
         {
@@ -212,7 +219,9 @@ public sealed class ImageDetector
             CornerFit = finalCornerFit,
             CornerRadius = finalCornerRadius,
             AreaRatio = (double)refinedAnalysisBounds.Width * refinedAnalysisBounds.Height /
-                        (analysis.Width * analysis.Height)
+                        (analysis.Width * analysis.Height),
+            BackdropSeparation = finalBackdropSeparation,
+            BoundaryContrast = finalBoundaryContrast
         };
 
         var secondMatch = ranked.FirstOrDefault(candidate => !ReferenceEquals(candidate, bestMatch));
@@ -225,8 +234,10 @@ public sealed class ImageDetector
             return new DetectionResult(DetectionStatus.Review, best, second,
                 "A foreground region was found, but its boundaries or separation are uncertain.");
 
-        return new DetectionResult(DetectionStatus.Extracted, best, second,
-            "Foreground boundaries and focus separation passed the initial heuristic thresholds.");
+        var successReason = recognizedForegroundCard
+            ? "A centered foreground image is strongly separated from its blurred backdrop, with consistent evidence along all four boundaries."
+            : "Foreground boundaries and focus separation passed the initial heuristic thresholds.";
+        return new DetectionResult(DetectionStatus.Extracted, best, second, successReason);
     }
 
     private static void AddCandidate(
@@ -331,6 +342,50 @@ public sealed class ImageDetector
                cornerFit * 0.04 +
                centerPreference * 0.06 +
                boundaryContrast * 0.06;
+    }
+
+    private static double? ScoreForegroundCardCandidate(
+        Rect bounds,
+        int imageWidth,
+        int imageHeight,
+        double boundary,
+        double geometry,
+        double boundaryContrast,
+        double backdropSeparation,
+        double cornerFit)
+    {
+        var widthRatio = (double)bounds.Width / imageWidth;
+        var areaRatio = (double)bounds.Width * bounds.Height / (imageWidth * imageHeight);
+        var aspectRatio = (double)bounds.Width / Math.Max(1, bounds.Height);
+        var center = CandidateScorer.MeasureCenterPreference(bounds, imageWidth, imageHeight);
+
+        // This specialist model is intentionally narrow: a large, centered,
+        // near-full-width image card floating over a blurred screenshot backdrop.
+        if (widthRatio < 0.78 ||
+            areaRatio is < 0.12 or > 0.78 ||
+            aspectRatio is < 0.65 or > 2.5 ||
+            center < 0.80 ||
+            boundary < 0.70 ||
+            geometry < 0.55 ||
+            boundaryContrast < 0.55 ||
+            backdropSeparation < 0.65)
+            return null;
+
+        var widthFill = Math.Clamp((widthRatio - 0.78) / (0.92 - 0.78), 0, 1);
+        var areaFit =
+            Math.Clamp((areaRatio - 0.10) / 0.15, 0, 1) *
+            Math.Clamp((0.78 - areaRatio) / 0.18, 0, 1);
+
+        // These features express the actual visual pattern: reliable four-sided
+        // boundaries, a sharp interior, a blurred exterior, and centered card layout.
+        return boundary * 0.25 +
+               geometry * 0.12 +
+               boundaryContrast * 0.18 +
+               backdropSeparation * 0.25 +
+               center * 0.07 +
+               widthFill * 0.08 +
+               areaFit * 0.03 +
+               cornerFit * 0.02;
     }
 
     private static Task ReportProgress(int progress, Action<int>? reportProgress, Func<Task>? yieldToBrowser)
