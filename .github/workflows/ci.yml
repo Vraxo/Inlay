@@ -91,7 +91,22 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Fetch native GGUF runtime
-        run: git clone --recurse-submodules https://github.com/Asher-1/sam3-ggml.git native-sam3
+        shell: pwsh
+        run: |
+          git -c core.autocrlf=false clone --recurse-submodules https://github.com/Asher-1/sam3-ggml.git native-sam3
+          git -C native-sam3 config core.autocrlf false
+          git -C native-sam3/ggml config core.autocrlf false
+          git -C native-sam3 checkout-index --all --force
+          git -C native-sam3/ggml checkout-index --all --force
+          $expectedPatch = git -C native-sam3 rev-parse HEAD:ggml-patches/0001-sam3-ggml-combined.patch
+          $actualPatch = git -C native-sam3 hash-object ggml-patches/0001-sam3-ggml-combined.patch
+          $expectedHeader = git -C native-sam3/ggml rev-parse HEAD:include/ggml.h
+          $actualHeader = git -C native-sam3/ggml hash-object include/ggml.h
+          Write-Host "Patch blob: $actualPatch (expected $expectedPatch)"
+          Write-Host "ggml header blob: $actualHeader (expected $expectedHeader)"
+          if ($expectedPatch -ne $actualPatch -or $expectedHeader -ne $actualHeader) {
+            throw "Windows checkout changed a tracked file despite core.autocrlf=false."
+          }
       - name: Configure CPU build
         shell: pwsh
         run: |
