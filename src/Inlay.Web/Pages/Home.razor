@@ -58,7 +58,8 @@
                     <BatchImageItem @key="image.Id"
                                     Image="image"
                                     IsSelected="@ReferenceEquals(activeImage, image)"
-                                    OnSelect="SelectImage" />
+                                    OnSelect="SelectImage"
+                                    OnCopyDiagnostics="CopyImageDiagnostics" />
                 }
             </div>
         }
