@@ -65,7 +65,7 @@ else {
 if ($LASTEXITCODE -ne 0) { throw "Failed to initialize the ggml submodule." }
 
 Write-Host "Configuring native CUDA build..."
-& cmake -S $runtimeRoot -B $buildRoot -G "Visual Studio 17 2022" -A x64 -DSAM3_CUDA=ON -DSAM3_METAL=OFF -DSAM3_BUILD_EXAMPLES=ON -DCMAKE_CUDA_ARCHITECTURES=86
+& cmake -S $runtimeRoot -B $buildRoot -G $generator -A x64 -DSAM3_CUDA=ON -DSAM3_METAL=OFF -DSAM3_BUILD_EXAMPLES=ON -DCMAKE_CUDA_ARCHITECTURES=86
 if ($LASTEXITCODE -ne 0) {
     throw "CMake configuration failed. Check that CUDA Toolkit, Visual Studio 2022 C++ tools, CMake, and Git Bash are installed."
 }
