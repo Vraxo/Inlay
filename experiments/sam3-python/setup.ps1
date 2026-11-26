@@ -1,5 +1,4 @@
 $ErrorActionPreference = "Stop"
-Set-Location $PSScriptRoot
 
 if (-not (Get-Command py -ErrorAction SilentlyContinue)) {
     throw "Python Launcher (py.exe) was not found. Install 64-bit Python 3.12."
@@ -13,10 +12,11 @@ if ($LASTEXITCODE -ne 0) {
     throw "Python 3.12 was not found. Install 64-bit Python 3.12 and rerun this script."
 }
 
-if (-not (Test-Path ".venv")) {
-    py -3.12 -m venv .venv
+$environment = Join-Path $PSScriptRoot ".venv"
+if (-not (Test-Path $environment)) {
+    py -3.12 -m venv $environment
 }
-$python = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
+$python = Join-Path $environment "Scripts\python.exe"
 if (-not (Test-Path $python)) {
     throw "The experiment virtual environment could not be created."
 }
@@ -31,7 +31,8 @@ if ($LASTEXITCODE -ne 0) { throw "Failed to install CUDA-enabled PyTorch." }
 
 Write-Host ""
 Write-Host "Installing the experiment and Meta's official SAM 3 package..."
-& $python -m pip install -r requirements.txt
+$requirements = Join-Path $PSScriptRoot "requirements.txt"
+& $python -m pip install -r $requirements
 if ($LASTEXITCODE -ne 0) { throw "Failed to install experiment dependencies." }
 
 & $python -m pip install git+https://github.com/facebookresearch/sam3.git
@@ -39,7 +40,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "Official SAM 3 installation failed. Check the Python, pip, and Git errors above."
 }
 
-& $python -m pip install -e .
+& $python -m pip install -e $PSScriptRoot
 if ($LASTEXITCODE -ne 0) { throw "Failed to install the Inlay SAM 3 command." }
 
 Write-Host ""
