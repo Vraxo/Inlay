@@ -3,7 +3,5 @@ __pycache__/
 .pytest_cache/
 *.py[cod]
 *.sam3/
-*.sam3-gguf/
-.deps/
-build*/
+models/*.pt
 models/*.gguf
