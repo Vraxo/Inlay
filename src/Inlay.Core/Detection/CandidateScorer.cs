@@ -18,32 +18,140 @@ internal static class CandidateScorer
 
     internal static double MeasureRectangleGeometry(Mat edges, Rect rect)
     {
-        var thickness = Math.Max(1, Math.Min(3, Math.Min(rect.Width, rect.Height) / 100));
-        var top = DetectionGeometry.CountEdges(edges, new Rect(rect.X, rect.Y, rect.Width, thickness)) /
-                  (rect.Width * (double)thickness);
-        var bottom = DetectionGeometry.CountEdges(edges, new Rect(rect.X, rect.Bottom - thickness, rect.Width, thickness)) /
-                     (rect.Width * (double)thickness);
-        var left = DetectionGeometry.CountEdges(edges, new Rect(rect.X, rect.Y, thickness, rect.Height)) /
-                   (rect.Height * (double)thickness);
-        var right = DetectionGeometry.CountEdges(edges, new Rect(rect.Right - thickness, rect.Y, thickness, rect.Height)) /
-                    (rect.Height * (double)thickness);
+        rect = DetectionGeometry.ClampRect(rect, edges.Width, edges.Height);
+        var thickness = GetBoundaryThickness(rect);
+        var tolerance = GetBoundaryTolerance(rect);
+        var top = MeasureBestSideCoverage(edges, rect, thickness, tolerance, true, true);
+        var bottom = MeasureBestSideCoverage(edges, rect, thickness, tolerance, true, false);
+        var left = MeasureBestSideCoverage(edges, rect, thickness, tolerance, false, true);
+        var right = MeasureBestSideCoverage(edges, rect, thickness, tolerance, false, false);
 
-        // A good rectangle needs all four sides, not just a strong average
-        // that can hide one missing or misplaced edge.
+        // A good rectangle needs all four sides. A few pixels of alignment
+        // error should not make an otherwise supported side disappear.
         return Math.Clamp(Math.Min(Math.Min(top, bottom), Math.Min(left, right)) * 3.0, 0, 1);
     }
 
     internal static double MeasureBoundaryContinuity(Mat edges, Rect rect)
     {
-        var thickness = Math.Max(1, Math.Min(3, Math.Min(rect.Width, rect.Height) / 100));
-        var top = DetectionGeometry.CountEdges(edges, new Rect(rect.X, rect.Y, rect.Width, thickness));
-        var bottom = DetectionGeometry.CountEdges(edges, new Rect(rect.X, rect.Bottom - thickness, rect.Width, thickness));
-        var left = DetectionGeometry.CountEdges(edges, new Rect(rect.X, rect.Y, thickness, rect.Height));
-        var right = DetectionGeometry.CountEdges(edges, new Rect(rect.Right - thickness, rect.Y, thickness, rect.Height));
-        var horizontal = (top + bottom) / (2.0 * rect.Width * thickness);
-        var vertical = (left + right) / (2.0 * rect.Height * thickness);
+        rect = DetectionGeometry.ClampRect(rect, edges.Width, edges.Height);
+        var thickness = GetBoundaryThickness(rect);
+        var tolerance = GetBoundaryTolerance(rect);
+        var top = MeasureBestSideCoverage(edges, rect, thickness, tolerance, true, true);
+        var bottom = MeasureBestSideCoverage(edges, rect, thickness, tolerance, true, false);
+        var left = MeasureBestSideCoverage(edges, rect, thickness, tolerance, false, true);
+        var right = MeasureBestSideCoverage(edges, rect, thickness, tolerance, false, false);
+        var horizontal = (top + bottom) * 0.5;
+        var vertical = (left + right) * 0.5;
         return Math.Clamp((horizontal + vertical) * 0.5 * 2.2, 0, 1);
     }
+
+    internal static double MeasureBoundaryContrast(Mat gray, Rect rect)
+    {
+        rect = DetectionGeometry.ClampRect(rect, gray.Width, gray.Height);
+        var thickness = GetBoundaryThickness(rect);
+        var tolerance = GetBoundaryTolerance(rect);
+        var top = MeasureBestBoundaryContrast(gray, rect, thickness, tolerance, true, true);
+        var bottom = MeasureBestBoundaryContrast(gray, rect, thickness, tolerance, true, false);
+        var left = MeasureBestBoundaryContrast(gray, rect, thickness, tolerance, false, true);
+        var right = MeasureBestBoundaryContrast(gray, rect, thickness, tolerance, false, false);
+
+        // Require contrast on every side so a single strong edge cannot
+        // make an unrelated rectangle appear reliable.
+        return Math.Clamp(Math.Min(Math.Min(top, bottom), Math.Min(left, right)) / 64.0, 0, 1);
+    }
+
+    private static double MeasureBestSideCoverage(
+        Mat edges,
+        Rect bounds,
+        int thickness,
+        int tolerance,
+        bool horizontal,
+        bool leading)
+    {
+        var best = 0.0;
+        for (var offset = -tolerance; offset <= tolerance; offset++)
+        {
+            var region = horizontal
+                ? leading
+                    ? new Rect(bounds.X, bounds.Y + offset, bounds.Width, thickness)
+                    : new Rect(bounds.X, bounds.Bottom - thickness + offset, bounds.Width, thickness)
+                : leading
+                    ? new Rect(bounds.X + offset, bounds.Y, thickness, bounds.Height)
+                    : new Rect(bounds.Right - thickness + offset, bounds.Y, thickness, bounds.Height);
+
+            if (!IsInsideImage(edges, region))
+                continue;
+
+            var area = region.Width * (double)region.Height;
+            best = Math.Max(best, DetectionGeometry.CountEdges(edges, region) / area);
+        }
+
+        return best;
+    }
+
+    private static double MeasureBestBoundaryContrast(
+        Mat gray,
+        Rect bounds,
+        int thickness,
+        int tolerance,
+        bool horizontal,
+        bool leading)
+    {
+        var inset = Math.Max(2, (horizontal ? bounds.Width : bounds.Height) / 10);
+        var span = (horizontal ? bounds.Width : bounds.Height) - inset * 2;
+        if (span <= 0)
+            return 0;
+
+        var best = 0.0;
+        for (var offset = -tolerance; offset <= tolerance; offset++)
+        {
+            Rect inside;
+            Rect outside;
+            if (horizontal)
+            {
+                var boundary = (leading ? bounds.Y : bounds.Bottom) + offset;
+                inside = leading
+                    ? new Rect(bounds.X + inset, boundary, span, thickness)
+                    : new Rect(bounds.X + inset, boundary - thickness, span, thickness);
+                outside = leading
+                    ? new Rect(bounds.X + inset, boundary - thickness, span, thickness)
+                    : new Rect(bounds.X + inset, boundary, span, thickness);
+            }
+            else
+            {
+                var boundary = (leading ? bounds.X : bounds.Right) + offset;
+                inside = leading
+                    ? new Rect(boundary, bounds.Y + inset, thickness, span)
+                    : new Rect(boundary - thickness, bounds.Y + inset, thickness, span);
+                outside = leading
+                    ? new Rect(boundary - thickness, bounds.Y + inset, thickness, span)
+                    : new Rect(boundary, bounds.Y + inset, thickness, span);
+            }
+
+            if (!IsInsideImage(gray, inside) || !IsInsideImage(gray, outside))
+                continue;
+
+            using var insideRegion = new Mat(gray, inside);
+            using var outsideRegion = new Mat(gray, outside);
+            using var difference = new Mat();
+            Cv2.Absdiff(insideRegion, outsideRegion, difference);
+            best = Math.Max(best, Cv2.Mean(difference).Val0);
+        }
+
+        return best;
+    }
+
+    private static int GetBoundaryThickness(Rect rect) =>
+        Math.Max(1, Math.Min(3, Math.Min(rect.Width, rect.Height) / 100));
+
+    private static int GetBoundaryTolerance(Rect rect) =>
+        Math.Clamp(Math.Min(rect.Width, rect.Height) / 160, 2, 6);
+
+    private static bool IsInsideImage(Mat image, Rect rect) =>
+        rect.X >= 0 &&
+        rect.Y >= 0 &&
+        rect.Right <= image.Width &&
+        rect.Bottom <= image.Height;
 
     internal static double MeasureEdgeStrength(Mat gray, Rect rect)
     {

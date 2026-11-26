@@ -195,9 +195,11 @@ public sealed class ImageDetector
         var finalEdgeStrength = CandidateScorer.MeasureEdgeStrength(gray, refinedAnalysisBounds);
         var finalGeometry = CandidateScorer.MeasureRectangleGeometry(edges, refinedAnalysisBounds);
         var finalSharpness = CandidateScorer.MeasureSharpnessContrast(focusMap, refinedAnalysisBounds);
-        var finalConfidence = ScoreCandidate(
+        var finalBoundaryContrast = CandidateScorer.MeasureBoundaryContrast(gray, refinedAnalysisBounds);
+        var finalConfidence = ScoreFinalCandidate(
             finalBoundary, finalEdgeStrength, finalGeometry, finalSharpness, finalCornerFit,
-            bestMatch.FromFocusMap, refinedAnalysisBounds, analysis.Width, analysis.Height);
+            finalBoundaryContrast, bestMatch.FromFocusMap,
+            refinedAnalysisBounds, analysis.Width, analysis.Height);
 
         best = best with
         {
@@ -298,6 +300,37 @@ public sealed class ImageDetector
                sharpness * 0.3036 +
                cornerFit * 0.046 +
                centerPreference * 0.08;
+    }
+
+    private static double ScoreFinalCandidate(
+        double boundary,
+        double edgeStrength,
+        double geometry,
+        double sharpness,
+        double cornerFit,
+        double boundaryContrast,
+        bool fromFocusMap,
+        Rect bounds,
+        int imageWidth,
+        int imageHeight)
+    {
+        var centerPreference = CandidateScorer.MeasureCenterPreference(bounds, imageWidth, imageHeight);
+        if (fromFocusMap)
+            return boundary * 0.22 +
+                   edgeStrength * 0.10 +
+                   geometry * 0.18 +
+                   sharpness * 0.30 +
+                   cornerFit * 0.04 +
+                   centerPreference * 0.08 +
+                   boundaryContrast * 0.08;
+
+        return boundary * 0.30 +
+               edgeStrength * 0.10 +
+               geometry * 0.20 +
+               sharpness * 0.24 +
+               cornerFit * 0.04 +
+               centerPreference * 0.06 +
+               boundaryContrast * 0.06;
     }
 
     private static Task ReportProgress(int progress, Action<int>? reportProgress, Func<Task>? yieldToBrowser)
