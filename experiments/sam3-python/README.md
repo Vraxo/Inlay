@@ -14,7 +14,7 @@ Requirements:
 
 From this directory in PowerShell, run:
 
-    ./setup.ps1
+    .\setup.ps1
 
 The script creates a local .venv, installs PyTorch with the CUDA 12.8 runtime, installs Meta's official SAM 3 package, and installs the Inlay runner.
 
@@ -27,21 +27,21 @@ SAM 3.1 weights are hosted behind Hugging Face access approval.
 1. Open the official [facebook/sam3.1 model page](https://huggingface.co/facebook/sam3.1), sign in, and request/accept access.
 2. After access is approved, authenticate from this directory:
 
-    ./.venv/Scripts/hf.exe auth login
+    .\.venv\Scripts\hf.exe auth login
 
 The runner downloads the official sam3.1_multiplex.pt checkpoint automatically on first use and Hugging Face caches it locally. **Do not place a GGUF file or manually copy model weights into this project.**
 
 ## Run
 
-    ./.venv/Scripts/inlay-sam3.exe C:/path/to/screenshot.png
+    .\.venv\Scripts\inlay-sam3.exe C:\path\to\screenshot.png
 
 Try a custom prompt (repeat --prompt to compare several):
 
-    ./.venv/Scripts/inlay-sam3.exe screenshot.png --prompt "the complete foreground photo panel, including its outer edges"
+    .\.venv\Scripts\inlay-sam3.exe screenshot.png --prompt "the complete foreground photo panel, including its outer edges"
 
 To provide an approximate rectangle as an additional visual prompt:
 
-    ./.venv/Scripts/inlay-sam3.exe screenshot.png --box 120,180,900,700
+    .\.venv\Scripts\inlay-sam3.exe screenshot.png --box 120,180,900,700
 
 By default, three panel-focused prompts are tested. The image is encoded once and its embeddings are reused between text prompts. The best text candidate's bounding rectangle is also tested as a visual box prompt.
 
