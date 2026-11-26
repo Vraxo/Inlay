@@ -10,18 +10,14 @@ Inlay includes a standalone Blazor WebAssembly app that uses the shared Inlay.Co
 
 Requires the .NET 11 SDK and the WebAssembly build tools workload:
 
-```powershell
-dotnet workload install wasm-tools
-dotnet run --project src/Inlay.Web
-```
+    dotnet workload install wasm-tools
+    dotnet run --project src/Inlay.Web
 
 For a static production build:
 
-```powershell
-dotnet publish src/Inlay.Web -c Release
-```
+    dotnet publish src/Inlay.Web -c Release
 
-The published files are written to `src/Inlay.Web/bin/Release/net11.0/publish/wwwroot`. They can be hosted as static files, including on GitHub Pages. The deployment must preserve the app's repository subpath and publish this directory; no server-side .NET hosting is required.
+The published files are written to src/Inlay.Web/bin/Release/net11.0/publish/wwwroot. They can be hosted as static files, including on GitHub Pages. The deployment must preserve the app's repository subpath and publish this directory; no server-side .NET hosting is required.
 
 The browser app accepts batches of up to 50 images (100 MB total, 25 MB per image) and processes them sequentially. Each image shows its own reading, detection, preview, and completion state; finished crops can be inspected and downloaded while the remaining files continue. It also supports direct crop adjustment, corner-radius control, a live PNG preview, and local download. Detection is still experimental; when it cannot find a candidate, you can define the crop manually.
 
@@ -33,20 +29,16 @@ The browser app accepts batches of up to 50 images (100 MB total, 25 MB per imag
 
 ## CLI usage
 
-```powershell
-inlay screenshot.jpg
-inlay .\screenshots --recursive --out .\extracted
-inlay screenshot.jpg --preview --report
-inlay screenshot.jpg --rect 26,592,869,867
-inlay screenshot.jpg --corners keep
-inlay screenshot.jpg --overwrite
-```
+    inlay screenshot.jpg
+    inlay ./screenshots --recursive --out ./extracted
+    inlay screenshot.jpg --preview --report
+    inlay screenshot.jpg --rect 26,592,869,867
+    inlay screenshot.jpg --corners keep
+    inlay screenshot.jpg --overwrite
 
 Run the CLI directly from the repository with:
 
-```powershell
-dotnet run --project src/Inlay.Cli -- screenshot.jpg
-```
+    dotnet run --project src/Inlay.Cli -- screenshot.jpg
 
 Supported input formats: PNG, JPEG/JPG, and WebP. PNG is used for extracted output so transparent rounded corners can be retained.
 
@@ -62,45 +54,43 @@ The score is a ranking heuristic, not a probability. Thresholds must be calibrat
 
 A local benchmark can measure detection against labelled screenshots without uploading any images:
 
-```powershell
-inlay benchmark .\benchmark\manifest.json
-```
+    inlay benchmark ./benchmark/manifest.json
 
-The manifest stores source-image paths relative to itself and the expected crop rectangle in source pixels. Set `expected` to `null` for screenshots that should not contain a foreground image:
+The manifest stores source-image paths relative to itself and the expected crop rectangle in source pixels. Set expected to null for screenshots that should not contain a foreground image:
 
-```json
-{
-  "minimumIou": 0.90,
-  "cases": [
     {
-      "image": "screenshots/01.png",
-      "expected": { "x": 32, "y": 300, "width": 1016, "height": 1200 }
-    },
-    {
-      "image": "screenshots/02.png",
-      "expected": null
+      "minimumIou": 0.90,
+      "cases": [
+        {
+          "image": "screenshots/01.png",
+          "expected": { "x": 32, "y": 300, "width": 1016, "height": 1200 }
+        },
+        {
+          "image": "screenshots/02.png",
+          "expected": null
+        }
+      ]
     }
-  ]
-}
-```
 
-The command reports candidate recall, crop overlap (IoU), automatic-extraction success, and false positives. It writes `inlay-benchmark-results.json` beside the manifest. Positive cases pass only when the detector automatically extracts a crop that meets the IoU target; negative cases pass only when no candidate is returned. Each expected rectangle must be labelled once, after which the same private set can be rerun after every detector change.
+The command reports candidate recall, crop overlap (IoU), automatic-extraction success, and false positives. It writes inlay-benchmark-results.json beside the manifest. Positive cases pass only when the detector automatically extracts a crop that meets the IoU target; negative cases pass only when no candidate is returned. Each expected rectangle must be labelled once, after which the same private set can be rerun after every detector change.
+
+## Optional local SAM 3.1 experiment
+
+For an AI segmentation experiment, see [experiments/sam3-python](experiments/sam3-python/README.md). It uses Meta's official SAM 3.1 Python implementation and PyTorch locally; it does not require the C++/GGUF runtime. Hugging Face access to the official facebook/sam3.1 checkpoint is required. The experiment is separate from the current .NET detector and browser app.
 
 ## Output
 
-For a single file, the default output is `<name>.inlay.png` beside the source. For a directory, the default output directory is `inlay/` beneath the input directory. With `--recursive`, relative subdirectory structure is retained. Existing files are not replaced unless `--overwrite` is supplied.
+For a single file, the default output is <name>.inlay.png beside the source. For a directory, the default output directory is inlay/ beneath the input directory. With --recursive, relative subdirectory structure is retained. Existing files are not replaced unless --overwrite is supplied.
 
-`--preview` writes a JPEG diagnostic with the best candidate and (when present) runner-up. `--report` writes a JSON report. Review and rejected cases do not produce extracted image files.
+--preview writes a JPEG diagnostic with the best candidate and (when present) runner-up. --report writes a JSON report. Review and rejected cases do not produce extracted image files.
 
 ## Development
 
-```powershell
-dotnet restore
-dotnet build --configuration Release
-dotnet test --configuration Release
-```
+    dotnet restore
+    dotnet build --configuration Release
+    dotnet test --configuration Release
 
-The shared image-processing code lives in `src/Inlay.Core`; the CLI and browser app are separate consumers.
+The shared image-processing code lives in src/Inlay.Core; the CLI and browser app are separate consumers.
 
 ## Privacy
 

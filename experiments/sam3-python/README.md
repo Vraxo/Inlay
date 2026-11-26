@@ -1,102 +1,66 @@
-# Inlay — SAM 3.1 segmentation experiments
+# Inlay — local SAM 3.1 photo-panel experiment
 
-A deliberately small experiment to find out whether SAM 3.1 can segment the **entire foreground photo panel** in Inlay screenshots—not merely the person or object inside that photo.
+This experiment tests whether Meta's **official SAM 3.1** can segment the complete foreground photo panel in an Inlay screenshot—not merely the person or object inside the photo.
 
-This is isolated from the existing .NET application. The folder name is historical; **the recommended path is now the native GGUF/C++ runtime**.
+It runs locally in Python with PyTorch. There is no custom C++ runtime, GGUF conversion, model server, or image upload.
 
-## 1. Recommended: native GGUF runtime (no PyTorch)
+## Setup (Windows)
 
-The GGUF route uses [Asher-1/sam3-ggml](https://github.com/Asher-1/sam3-ggml), a native C++/ggml implementation. It loads the .gguf model directly. It does **not** install or run Python, PyTorch, torchvision, or the official Python SAM package.
+Requirements:
 
-### Put the model here
+- 64-bit Python 3.12
+- Git for Windows
+- An NVIDIA GPU and a compatible NVIDIA driver for CUDA acceleration
 
-Copy your downloaded SAM 3.1 GGUF file into this directory:
+From this directory in PowerShell, run:
 
-```text
-experiments/sam3-python/
-└── models/
-    └── sam3.1-f16.gguf
-```
+    .\setup.ps1
 
-The runner also recognizes sam3.1-q8_0.gguf, sam3-f16.gguf, and sam3-q8_0.gguf. If you have a differently named model, pass its path with -Model. Keep model files local; they are ignored by Git.
+The script creates a local .venv, installs PyTorch with the CUDA 12.8 runtime, installs Meta's official SAM 3 package, and installs the Inlay runner.
 
-### Windows prerequisites
+**You do not need to install the CUDA Toolkit, CMake, Visual Studio C++ Build Tools, or any separate native compiler.** PyTorch's CUDA wheel includes the runtime libraries; an NVIDIA driver is still required for GPU inference. If CUDA is unavailable, the runner falls back to CPU, which can be very slow.
 
-- Git for Windows (including Git Bash)
-- CMake 3.24+
-- Visual Studio 2022 Build Tools with **Desktop development with C++**
-- NVIDIA CUDA Toolkit 12.6+ (nvcc on PATH)
+## Model access (one time)
 
-The build targets CUDA architecture 8.6 for the RTX 3060. It builds only the offline visualization CLI, so SDL2 and the optional interactive GUI are not needed. The C++ runtime source and ggml submodule are cloned into the ignored .deps/ directory.
+SAM 3.1 weights are hosted behind Hugging Face access approval.
 
-### Build once
+1. Open the official [facebook/sam3.1 model page](https://huggingface.co/facebook/sam3.1), sign in, and request/accept access.
+2. After access is approved, authenticate from this directory:
 
-From this directory in PowerShell:
+    .\.venv\Scripts\hf.exe auth login
 
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\setup.ps1
-```
+The runner downloads the official sam3.1_multiplex.pt checkpoint automatically on first use and Hugging Face caches it locally. **Do not place a GGUF file or manually copy model weights into this project.**
 
-This configures and compiles sam3_vis.exe with CUDA support. It does not download model weights; use the GGUF file you already downloaded.
+## Run
 
-### Run the panel-detection experiment
+    .\.venv\Scripts\inlay-sam3.exe C:\path\to\screenshot.png
 
-```powershell
-.\run-gguf.ps1 -Image C:\path\to\screenshot.png
-```
+Try a custom prompt (repeat --prompt to compare several):
 
-By default, the runner tests three descriptions of the complete foreground photo panel. It uses automatic backend selection (CUDA first, with the runtime's supported fallbacks). To force CUDA:
+    .\.venv\Scripts\inlay-sam3.exe screenshot.png --prompt "the complete foreground photo panel, including its outer edges"
 
-```powershell
-.\run-gguf.ps1 -Image C:\path\to\screenshot.png -Device cuda
-```
+To provide an approximate rectangle as an additional visual prompt:
 
-To test a custom prompt:
+    .\.venv\Scripts\inlay-sam3.exe screenshot.png --box 120,180,900,700
 
-```powershell
-.\run-gguf.ps1 -Image C:\path\to\screenshot.png -Prompt "the complete rectangular photo panel in the foreground"
-```
+By default, three panel-focused prompts are tested. The image is encoded once and its embeddings are reused between text prompts. The best text candidate's bounding rectangle is also tested as a visual box prompt.
 
-Output is written beside the source image in a directory ending in .sam3-gguf. Each prompt produces a rendered PNG overlay and a log containing the detection count, scores, and boxes. report.json records the prompt, output path, selected device, and process result.
+## Output
 
-**The overlay is the important evidence:** a mask around the person/object *inside* the photograph is a failure for Inlay's purpose. A detection score is not a calibrated probability and does not prove that the outer photo panel was found.
+A directory named <image-name>.sam3 is created beside the input image. It contains:
 
-## 2. Optional: official Python/PyTorch comparison
+- *-overlay.png: the predicted mask over the original screenshot
+- *-mask.png: the binary mask
+- *-crop.png: the masked crop with transparency outside the predicted region
+- report.json: prompts, raw model scores, crop bounds, device, and timings
 
-The original official Meta Python experiment remains available for comparison. This path is separate and **does** install a large CUDA-enabled PyTorch stack.
+**Inspect the overlay first.** A mask around the subject inside the photo is a failure for Inlay's purpose; the mask must follow the outer photo panel. Model scores are not calibrated probabilities and do not prove crop correctness.
 
-1. Request access to the official [Meta SAM 3.1 Hugging Face model](https://huggingface.co/facebook/sam3.1), accept the terms, and create a read token.
-2. Use 64-bit Python 3.12. From this directory, run:
+## Tests
 
-```powershell
-.\setup-python.ps1
-.\.venv\Scripts\hf.exe auth login
-```
+The geometry tests do not load SAM or download model weights:
 
-3. Run the Python experiment:
+    python -m pip install -r requirements.txt
+    python -m pytest -q
 
-```powershell
-.\.venv\Scripts\inlay-sam3.exe C:\path\to\screenshot.png
-```
-
-The Python experiment saves masks, transparent masked crops, overlays, raw model scores, bounding rectangles, and inference time. Native Windows support for the official Python project is not explicitly guaranteed; WSL2 is the fallback if a native dependency fails.
-
-## 3. Tests
-
-The lightweight Python geometry tests do not install PyTorch:
-
-```powershell
-py -3.12 -m pip install -r requirements.txt
-py -3.12 -m pytest
-```
-
-The PowerShell setup and runner scripts are syntax-checked in Windows CI. CI also compiles the native SAM 3 CLI with the Windows MSVC toolchain (CPU backend); the CUDA-enabled build still needs to be validated on a Windows machine with the prerequisites above.
-
-## Important interpretation
-
-- SAM scores are not calibrated probabilities.
-- A high score does not prove that the full panel was selected.
-- A mask of the person/object *inside* the photograph is a failed result for Inlay's purpose.
-- The decisive test is visual: does the mask follow the outer photo panel across varied screenshots?
-- No model is assumed to achieve zero errors until it has been evaluated on a labelled, held-out set.
+The experiment is intentionally separate from Inlay's .NET detector and browser app. It is an evaluation path, not yet a production integration. No zero-error claim should be made until it has been tested on a labelled, held-out screenshot set.

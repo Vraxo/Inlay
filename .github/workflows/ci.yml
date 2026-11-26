@@ -61,65 +61,17 @@ jobs:
         working-directory: experiments/sam3-python
 
   powershell-syntax:
-    name: PowerShell script syntax
+    name: PowerShell setup syntax
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Parse setup and runner scripts
+      - name: Parse setup script
         shell: pwsh
         run: |
-          $files = @(
-            "experiments/sam3-python/setup.ps1",
-            "experiments/sam3-python/setup-gguf.ps1",
-            "experiments/sam3-python/setup-python.ps1",
-            "experiments/sam3-python/run-gguf.ps1"
-          )
-          foreach ($file in $files) {
-            $tokens = $null
-            $errors = $null
-            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors) | Out-Null
-            if ($errors.Count -gt 0) {
-              $errors | Format-List
-              exit 1
-            }
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "experiments/sam3-python/setup.ps1"), [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | Format-List
+            exit 1
           }
-
-  native-sam3-windows-build:
-    name: Native SAM 3 Windows build
-    runs-on: windows-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - name: Fetch native GGUF runtime
-        shell: pwsh
-        run: |
-          $runtimeCommit = "103351b3221b771e6988f9a0e1561b4994863ce0"
-          git -c core.autocrlf=false clone https://github.com/Asher-1/sam3-ggml.git native-sam3
-          if ($LASTEXITCODE -ne 0) { throw "Could not clone native SAM 3 runtime." }
-          git -C native-sam3 fetch origin $runtimeCommit
-          if ($LASTEXITCODE -ne 0) { throw "Could not fetch the patch-compatible runtime commit." }
-          git -C native-sam3 checkout --detach $runtimeCommit
-          if ($LASTEXITCODE -ne 0) { throw "Could not select the patch-compatible runtime commit." }
-          git -C native-sam3 submodule update --init --recursive
-          if ($LASTEXITCODE -ne 0) { throw "Could not initialize the pinned ggml submodule." }
-          git -C native-sam3 config core.autocrlf false
-          git -C native-sam3/ggml config core.autocrlf false
-          git -C native-sam3 checkout-index --all --force
-          git -C native-sam3/ggml checkout-index --all --force
-          $expectedPatch = git -C native-sam3 rev-parse HEAD:ggml-patches/0001-sam3-ggml-combined.patch
-          $actualPatch = git -C native-sam3 hash-object ggml-patches/0001-sam3-ggml-combined.patch
-          $expectedHeader = git -C native-sam3/ggml rev-parse HEAD:include/ggml.h
-          $actualHeader = git -C native-sam3/ggml hash-object include/ggml.h
-          Write-Host "Patch blob: $actualPatch (expected $expectedPatch)"
-          Write-Host "ggml header blob: $actualHeader (expected $expectedHeader)"
-          if ($expectedPatch -ne $actualPatch -or $expectedHeader -ne $actualHeader) {
-            throw "Windows checkout changed a tracked source file despite core.autocrlf=false."
-          }
-      - name: Configure headless native CLI
-        shell: pwsh
-        run: |
-          $env:PATH = "$env:ProgramFiles\Git\bin;$env:PATH"
-          cmake -S experiments/sam3-python/native-cli -B native-sam3-build -G "Visual Studio 18 2026" -A x64 -DSAM3_SOURCE_DIR="${{ github.workspace }}\native-sam3" -DSAM3_CUDA=OFF -DSAM3_METAL=OFF -DSAM3_BUILD_EXAMPLES=OFF
-          if ($LASTEXITCODE -ne 0) { throw "Native SAM 3 CMake configuration failed." }
-      - name: Compile headless segmentation CLI
-        run: cmake --build native-sam3-build --config Release --target sam3_panel_cli --parallel 2
