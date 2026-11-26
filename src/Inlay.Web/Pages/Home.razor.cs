@@ -594,6 +594,66 @@ public partial class Home : IAsyncDisposable
         await Download(bytes, "inlay-batch-diagnostics.json", "application/json");
     }
 
+    private async Task CopyImageDiagnostics(BatchImage image)
+    {
+        if (!image.IsComplete)
+            return;
+
+        var detection = image.Detection;
+        var detectedBounds = detection?.Best?.Bounds;
+        var report = new
+        {
+            format = "inlay-image-diagnostics",
+            version = 1,
+            thresholds = new
+            {
+                automatic = DetectionResult.AutomaticThreshold,
+                review = DetectionResult.ReviewThreshold
+            },
+            processingStatus = image.Status.ToString(),
+            source = image.SourceWidth > 0 && image.SourceHeight > 0
+                ? new { width = image.SourceWidth, height = image.SourceHeight }
+                : null,
+            detection = detection is null
+                ? null
+                : new
+                {
+                    status = detection.Status.ToString(),
+                    reason = detection.Reason,
+                    best = CreateCandidateDiagnostics(detection.Best),
+                    second = CreateCandidateDiagnostics(detection.Second)
+                },
+            currentCrop = image.CropWidth > 0 && image.CropHeight > 0
+                ? new
+                {
+                    x = image.CropX,
+                    y = image.CropY,
+                    width = image.CropWidth,
+                    height = image.CropHeight,
+                    right = image.CropX + image.CropWidth,
+                    bottom = image.CropY + image.CropHeight,
+                    cornerRadius = image.CornerRadius
+                }
+                : null,
+            adjustmentFromDetected = detectedBounds is { } bounds
+                ? new
+                {
+                    left = image.CropX - bounds.X,
+                    top = image.CropY - bounds.Y,
+                    right = image.CropX + image.CropWidth - bounds.Right,
+                    bottom = image.CropY + image.CropHeight - bounds.Bottom
+                }
+                : null
+        };
+
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            WriteIndented = true
+        };
+        var json = JsonSerializer.Serialize(report, options);
+        await JS.InvokeVoidAsync("inlay.copyText", json);
+    }
+
     private static object? CreateCandidateDiagnostics(DetectionCandidate? candidate)
     {
         if (candidate is null)
