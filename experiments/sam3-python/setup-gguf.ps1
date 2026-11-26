@@ -14,7 +14,7 @@ function Require-Command([string]$Name, [string]$InstallHint) {
 Require-Command "git" "Install Git for Windows."
 Require-Command "cmake" "Install CMake 3.24 or newer and add it to PATH."
 $cmakeVersionText = (& cmake --version | Select-Object -First 1)
-if ($cmakeVersionText -notmatch "cmake version (\\d+)\\.(\\d+)") {
+if ($cmakeVersionText -notmatch "cmake version (\d+)\.(\d+)") {
     throw "Could not determine the installed CMake version."
 }
 $cmakeVersion = [version]::new([int]$Matches[1], [int]$Matches[2])
