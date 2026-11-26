@@ -37,9 +37,18 @@ if (-not (Test-Path $vswhere)) {
     throw "Visual Studio 2022 C++ Build Tools were not found. Install Visual Studio 2022 Build Tools with the 'Desktop development with C++' workload."
 }
 $vsInstall = & $vswhere -latest -products "*" -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-if ($LASTEXITCODE -ne 0 -or -not $vsInstall) {
-    throw "MSVC C++ build tools were not found. Install the Visual Studio 2022 'Desktop development with C++' workload."
+$vsVersion = & $vswhere -latest -products "*" -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationVersion
+if ($LASTEXITCODE -ne 0 -or -not $vsInstall -or -not $vsVersion) {
+    throw "MSVC C++ build tools were not found. Install Visual Studio 2022 or 2026 with the 'Desktop development with C++' workload."
 }
+
+$vsMajor = [int](($vsVersion -split "\.")[0])
+$generator = switch ($vsMajor) {
+    18 { "Visual Studio 18 2026" }
+    17 { "Visual Studio 17 2022" }
+    default { throw "Unsupported Visual Studio version $vsVersion. Install Visual Studio 2022 or 2026." }
+}
+Write-Host "Visual Studio: $vsVersion ($generator)"
 
 $cudaVersion = (& nvcc --version | Select-String "release").ToString()
 Write-Host "CUDA compiler: $cudaVersion"
@@ -48,7 +57,7 @@ Write-Host "Target GPU architecture: 86 (RTX 3060)"
 if (-not (Test-Path (Join-Path $runtimeRoot ".git"))) {
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $runtimeRoot) | Out-Null
     Write-Host "Cloning native SAM 3 runtime..."
-    & git clone --recurse-submodules $repositoryUrl $runtimeRoot
+    & git -c core.autocrlf=false clone --recurse-submodules $repositoryUrl $runtimeRoot
     if ($LASTEXITCODE -ne 0) { throw "Failed to clone the SAM 3 C++ runtime." }
 }
 else {
@@ -63,6 +72,21 @@ else {
 
 & git -C $runtimeRoot submodule update --init --recursive
 if ($LASTEXITCODE -ne 0) { throw "Failed to initialize the ggml submodule." }
+
+# The upstream patch series is generated against LF Git blobs. Windows
+# autocrlf conversion changes the checked-out text and makes git apply fail.
+# Disable conversion in both repositories and rewrite tracked files from
+# their indexes before CMake applies the patches.
+& git -C $runtimeRoot config core.autocrlf false
+if ($LASTEXITCODE -ne 0) { throw "Could not disable line-ending conversion in the native runtime checkout." }
+& git -C $runtimeRoot checkout-index --all --force
+if ($LASTEXITCODE -ne 0) { throw "Could not normalize the native runtime working tree." }
+
+$ggmlRoot = Join-Path $runtimeRoot "ggml"
+& git -C $ggmlRoot config core.autocrlf false
+if ($LASTEXITCODE -ne 0) { throw "Could not disable line-ending conversion in the ggml checkout." }
+& git -C $ggmlRoot checkout-index --all --force
+if ($LASTEXITCODE -ne 0) { throw "Could not normalize the ggml working tree." }
 
 Write-Host "Configuring native CUDA build..."
 & cmake -S $runtimeRoot -B $buildRoot -G $generator -A x64 -DSAM3_CUDA=ON -DSAM3_METAL=OFF -DSAM3_BUILD_EXAMPLES=ON -DCMAKE_CUDA_ARCHITECTURES=86
