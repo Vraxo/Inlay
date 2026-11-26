@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from .geometry import box_xyxy_to_xywh, mask_bounds, pixel_box_to_normalized_center
+from .geometry import mask_bounds, pixel_box_to_normalized_center
 
 
 DEFAULT_PROMPTS = (
@@ -131,11 +131,18 @@ def run_experiment(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     image = Image.open(image_path).convert("RGB")
-    model, processor, device = load_model()
+    _, processor, device = load_model()
     results: list[dict[str, Any]] = []
 
+    _synchronize(device)
+    image_started = time.perf_counter()
+    state = processor.set_image(image)
+    _synchronize(device)
+    image_encoding_seconds = time.perf_counter() - image_started
+
     for prompt_index, prompt in enumerate(prompts, start=1):
-        state = processor.set_image(image)
+        if prompt_index > 1:
+            processor.reset_all_prompts(state)
         _synchronize(device)
         started = time.perf_counter()
         output = processor.set_text_prompt(state=state, prompt=prompt)
@@ -160,7 +167,8 @@ def run_experiment(
         if candidates:
             best = max(candidates, key=lambda candidate: candidate["score"])
             if best["bounds"] is not None:
-                box = tuple(best["bounds"].values())
+                bounds = best["bounds"]
+                box = (bounds["x"], bounds["y"], bounds["width"], bounds["height"])
                 _run_box_prompt(
                     image, processor, device, box, output_dir,
                     f"text-{prompt_index}-box-refine", results
@@ -175,6 +183,7 @@ def run_experiment(
         "input": str(image_path.resolve()),
         "image_size": {"width": image.width, "height": image.height},
         "device": device,
+        "image_encoding_seconds": round(image_encoding_seconds, 3),
         "results": results,
         "note": (
             "SAM scores are raw model outputs, not calibrated probabilities. "
