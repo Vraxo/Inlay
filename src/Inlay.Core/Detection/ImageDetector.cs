@@ -191,9 +191,9 @@ public sealed class ImageDetector
 
         await ReportProgress(96, reportProgress, yieldToBrowser);
         var finalCornerFit = finalCornerRadius > 0 ? 0.85 : 0.65;
-        var finalBoundary = CandidateScorer.MeasureBoundaryContinuity(edges, refinedAnalysisBounds);
+        var finalBoundary = CandidateScorer.MeasureTolerantBoundaryContinuity(edges, refinedAnalysisBounds);
         var finalEdgeStrength = CandidateScorer.MeasureEdgeStrength(gray, refinedAnalysisBounds);
-        var finalGeometry = CandidateScorer.MeasureRectangleGeometry(edges, refinedAnalysisBounds);
+        var finalGeometry = CandidateScorer.MeasureTolerantRectangleGeometry(edges, refinedAnalysisBounds);
         var finalSharpness = CandidateScorer.MeasureSharpnessContrast(focusMap, refinedAnalysisBounds);
         var finalBoundaryContrast = CandidateScorer.MeasureBoundaryContrast(gray, refinedAnalysisBounds);
         var finalConfidence = ScoreFinalCandidate(

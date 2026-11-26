@@ -14,8 +14,8 @@ public sealed class CandidateScorerTests
         var actual = new Rect(97, 103, 506, 494);
         Cv2.Rectangle(edges, actual, Scalar.White, 2);
 
-        var continuity = CandidateScorer.MeasureBoundaryContinuity(edges, suggested);
-        var geometry = CandidateScorer.MeasureRectangleGeometry(edges, suggested);
+        var continuity = CandidateScorer.MeasureTolerantBoundaryContinuity(edges, suggested);
+        var geometry = CandidateScorer.MeasureTolerantRectangleGeometry(edges, suggested);
 
         Assert.True(continuity >= 0.80, $"Expected tolerant boundary continuity, got {continuity:F3}.");
         Assert.True(geometry >= 0.80, $"Expected tolerant rectangle geometry, got {geometry:F3}.");
