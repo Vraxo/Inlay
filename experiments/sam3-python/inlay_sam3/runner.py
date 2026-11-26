@@ -22,7 +22,7 @@ DEFAULT_PROMPTS = (
 def load_model() -> tuple[Any, Any, str]:
     """Load the official Meta SAM 3.1 image model directly into this process."""
     try:
-        from sam3.model_builder import build_sam3_image_model
+        from sam3.model_builder import build_sam3_image_model, download_ckpt_from_hf
         from sam3.model.sam3_image_processor import Sam3Processor
     except ImportError as error:
         raise RuntimeError(
@@ -33,7 +33,13 @@ def load_model() -> tuple[Any, Any, str]:
     if device == "cpu":
         print("WARNING: CUDA is unavailable; inference will run on CPU and may be slow.")
 
-    model = build_sam3_image_model(device=device, eval_mode=True)
+    checkpoint = download_ckpt_from_hf(version="sam3.1")
+    model = build_sam3_image_model(
+        device=device,
+        eval_mode=True,
+        checkpoint_path=checkpoint,
+        load_from_HF=False,
+    )
     processor = Sam3Processor(model, device=device, confidence_threshold=0.15)
     return model, processor, device
 
