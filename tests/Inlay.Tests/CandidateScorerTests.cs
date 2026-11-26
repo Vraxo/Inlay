@@ -22,7 +22,7 @@ public sealed class CandidateScorerTests
     }
 
     [Fact]
-    public void BoundaryContrastFindsAForegroundEdgeA few pixelsAway()
+    public void BoundaryContrastFindsForegroundEdgeSeveralPixelsAway()
     {
         using var gray = new Mat(700, 700, MatType.CV_8UC1, new Scalar(25));
         var suggested = new Rect(100, 100, 500, 500);
