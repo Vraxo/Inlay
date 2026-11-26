@@ -83,6 +83,15 @@ if ($LASTEXITCODE -ne 0) { throw "Could not disable line-ending conversion in th
 if ($LASTEXITCODE -ne 0) { throw "Could not normalize the native runtime working tree." }
 
 $ggmlRoot = Join-Path $runtimeRoot "ggml"
+
+# The SAM 3 fork's patch series is rebased against ggml v0.21.0.
+# Its moving submodule pointer can advance independently, making those
+# patches fail against newer ggml sources. Pin the verified compatible commit.
+& git -C $ggmlRoot fetch origin 8599e0ea3756c4bac4ef813af2241cb1a8bbfb0b
+if ($LASTEXITCODE -ne 0) { throw "Failed to fetch the ggml v0.21.0 revision required by the upstream SAM 3 patches." }
+& git -C $ggmlRoot checkout --detach 8599e0ea3756c4bac4ef813af2241cb1a8bbfb0b
+if ($LASTEXITCODE -ne 0) { throw "Could not select the ggml v0.21.0 revision required by the upstream SAM 3 patches." }
+
 & git -C $ggmlRoot config core.autocrlf false
 if ($LASTEXITCODE -ne 0) { throw "Could not disable line-ending conversion in the ggml checkout." }
 & git -C $ggmlRoot checkout-index --all --force
