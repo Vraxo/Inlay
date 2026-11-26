@@ -1,0 +1,5 @@
+# Install the CUDA-enabled PyTorch build first using setup.ps1.
+# Meta SAM 3 is installed from its official source repository by setup.ps1.
+numpy>=1.26,<2
+Pillow>=10.0
+pytest>=8.0
