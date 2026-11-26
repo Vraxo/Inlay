@@ -18,7 +18,9 @@ public sealed record DetectionCandidate(
     double SharpnessContrast,
     double CornerFit,
     int CornerRadius,
-    double AreaRatio);
+    double AreaRatio,
+    double BackdropSeparation = 0,
+    double BoundaryContrast = 0);
 
 public sealed record DetectionResult(
     DetectionStatus Status,
