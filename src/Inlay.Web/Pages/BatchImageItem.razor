@@ -1,6 +1,7 @@
 @namespace Inlay.Web.Pages
 @implements IDisposable
 
+<div class="batch-item-row">
 <button type="button"
         class="batch-item @(IsSelected ? "selected" : "") @(!Image.CanSelect ? "pending" : "")"
         @onclick="SelectImage"
@@ -39,11 +40,17 @@
         <span class="selected-mark">✓</span>
     }
 </button>
+@if (Image.IsComplete)
+{
+    <button type="button" class="copy-diagnostics" title="Copy this image's diagnostics" aria-label="Copy diagnostics for @Image.FileName" @onclick="CopyDiagnostics">↗</button>
+}
+</div>
 
 @code {
     [Parameter, EditorRequired] public BatchImage Image { get; set; } = null!;
     [Parameter] public bool IsSelected { get; set; }
     [Parameter] public EventCallback<BatchImage> OnSelect { get; set; }
+    [Parameter] public EventCallback<BatchImage> OnCopyDiagnostics { get; set; }
     private BatchImage? subscribedImage;
 
     protected override void OnParametersSet()
@@ -58,6 +65,7 @@
 
     private void OnImageChanged(object? sender, EventArgs args) => _ = InvokeAsync(StateHasChanged);
     private Task SelectImage() => OnSelect.InvokeAsync(Image);
+    private Task CopyDiagnostics() => OnCopyDiagnostics.InvokeAsync(Image);
 
     private static string GetStatusLabel(BatchImage image)
     {
