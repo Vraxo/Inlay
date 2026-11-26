@@ -20,7 +20,7 @@ DEFAULT_PROMPTS = (
 
 
 def load_model() -> tuple[Any, Any, str]:
-    """Load the official Meta SAM 3.1 image model directly into this process."""
+    """Load Meta's official SAM 3.1 image model directly into this process."""
     try:
         from sam3.model_builder import build_sam3_image_model, download_ckpt_from_hf
         from sam3.model.sam3_image_processor import Sam3Processor
@@ -31,9 +31,20 @@ def load_model() -> tuple[Any, Any, str]:
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     if device == "cpu":
-        print("WARNING: CUDA is unavailable; inference will run on CPU and may be slow.")
+        print("WARNING: CUDA is unavailable; inference will run on CPU and may be very slow.")
+    else:
+        print(f"Using GPU: {torch.cuda.get_device_name(0)}")
 
-    checkpoint = download_ckpt_from_hf(version="sam3.1")
+    try:
+        checkpoint = download_ckpt_from_hf(version="sam3.1")
+    except Exception as error:
+        raise RuntimeError(
+            "Could not download the official SAM 3.1 checkpoint from Hugging Face. "
+            "Request/accept access to https://huggingface.co/facebook/sam3.1, then run "
+            ".venv\\Scripts\\hf.exe auth login from this directory. "
+            f"Original error: {error}"
+        ) from error
+
     model = build_sam3_image_model(
         device=device,
         eval_mode=True,
@@ -154,9 +165,7 @@ def run_experiment(
         output = processor.set_text_prompt(state=state, prompt=prompt)
         _synchronize(device)
         elapsed = time.perf_counter() - started
-        candidates = _save_output(
-            image, output, f"text-{prompt_index}", output_dir
-        )
+        candidates = _save_output(image, output, f"text-{prompt_index}", output_dir)
         results.append(
             {
                 "method": f"text-{prompt_index}",
@@ -176,8 +185,13 @@ def run_experiment(
                 bounds = best["bounds"]
                 box = (bounds["x"], bounds["y"], bounds["width"], bounds["height"])
                 _run_box_prompt(
-                    image, processor, device, box, output_dir,
-                    f"text-{prompt_index}-box-refine", results
+                    image,
+                    processor,
+                    device,
+                    box,
+                    output_dir,
+                    f"text-{prompt_index}-box-refine",
+                    results,
                 )
 
     if manual_box is not None:
@@ -214,9 +228,7 @@ def _run_box_prompt(
     results: list[dict[str, Any]],
 ) -> None:
     state = processor.set_image(image)
-    normalized = pixel_box_to_normalized_center(
-        box, image.width, image.height
-    )
+    normalized = pixel_box_to_normalized_center(box, image.width, image.height)
     _synchronize(device)
     started = time.perf_counter()
     output = processor.add_geometric_prompt(
