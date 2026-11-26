@@ -234,10 +234,10 @@ public sealed class ImageDetector
             return new DetectionResult(DetectionStatus.Review, best, second,
                 "A foreground region was found, but its boundaries or separation are uncertain.");
 
-        var reason = recognizedForegroundCard
+        var successReason = recognizedForegroundCard
             ? "A centered foreground image is strongly separated from its blurred backdrop, with consistent evidence along all four boundaries."
             : "Foreground boundaries and focus separation passed the initial heuristic thresholds.";
-        return new DetectionResult(DetectionStatus.Extracted, best, second, reason);
+        return new DetectionResult(DetectionStatus.Extracted, best, second, successReason);
     }
 
     private static void AddCandidate(
