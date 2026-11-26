@@ -94,6 +94,12 @@ jobs:
         shell: pwsh
         run: |
           git -c core.autocrlf=false clone --recurse-submodules https://github.com/Asher-1/sam3-ggml.git native-sam3
+          # The upstream SAM 3 patch series is rebased against ggml v0.21.0.
+          # Pin that verified base instead of following the moving submodule pointer.
+          git -C native-sam3/ggml fetch origin 8599e0ea3756c4bac4ef813af2241cb1a8bbfb0b
+          if ($LASTEXITCODE -ne 0) { throw "Could not fetch the ggml revision required by the SAM 3 patches." }
+          git -C native-sam3/ggml checkout --detach 8599e0ea3756c4bac4ef813af2241cb1a8bbfb0b
+          if ($LASTEXITCODE -ne 0) { throw "Could not select the ggml revision required by the SAM 3 patches." }
           git -C native-sam3 config core.autocrlf false
           git -C native-sam3/ggml config core.autocrlf false
           git -C native-sam3 checkout-index --all --force
