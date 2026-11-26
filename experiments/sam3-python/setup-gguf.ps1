@@ -13,6 +13,14 @@ function Require-Command([string]$Name, [string]$InstallHint) {
 
 Require-Command "git" "Install Git for Windows."
 Require-Command "cmake" "Install CMake 3.24 or newer and add it to PATH."
+$cmakeVersionText = (& cmake --version | Select-Object -First 1)
+if ($cmakeVersionText -notmatch "cmake version (\\d+)\\.(\\d+)") {
+    throw "Could not determine the installed CMake version."
+}
+$cmakeVersion = [version]::new([int]$Matches[1], [int]$Matches[2])
+if ($cmakeVersion -lt [version]::new(3, 24)) {
+    throw "CMake 3.24 or newer is required. Found $cmakeVersionText."
+}
 Require-Command "nvcc" "Install the NVIDIA CUDA Toolkit 12.6 or newer and add nvcc to PATH."
 
 $gitCommand = Get-Command git
