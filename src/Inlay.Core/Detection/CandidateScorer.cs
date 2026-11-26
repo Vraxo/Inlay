@@ -18,6 +18,35 @@ internal static class CandidateScorer
 
     internal static double MeasureRectangleGeometry(Mat edges, Rect rect)
     {
+        var thickness = Math.Max(1, Math.Min(3, Math.Min(rect.Width, rect.Height) / 100));
+        var top = DetectionGeometry.CountEdges(edges, new Rect(rect.X, rect.Y, rect.Width, thickness)) /
+                  (rect.Width * (double)thickness);
+        var bottom = DetectionGeometry.CountEdges(edges, new Rect(rect.X, rect.Bottom - thickness, rect.Width, thickness)) /
+                     (rect.Width * (double)thickness);
+        var left = DetectionGeometry.CountEdges(edges, new Rect(rect.X, rect.Y, thickness, rect.Height)) /
+                   (rect.Height * (double)thickness);
+        var right = DetectionGeometry.CountEdges(edges, new Rect(rect.Right - thickness, rect.Y, thickness, rect.Height)) /
+                    (rect.Height * (double)thickness);
+
+        // A good rectangle needs all four sides, not just a strong average
+        // that can hide one missing or misplaced edge.
+        return Math.Clamp(Math.Min(Math.Min(top, bottom), Math.Min(left, right)) * 3.0, 0, 1);
+    }
+
+    internal static double MeasureBoundaryContinuity(Mat edges, Rect rect)
+    {
+        var thickness = Math.Max(1, Math.Min(3, Math.Min(rect.Width, rect.Height) / 100));
+        var top = DetectionGeometry.CountEdges(edges, new Rect(rect.X, rect.Y, rect.Width, thickness));
+        var bottom = DetectionGeometry.CountEdges(edges, new Rect(rect.X, rect.Bottom - thickness, rect.Width, thickness));
+        var left = DetectionGeometry.CountEdges(edges, new Rect(rect.X, rect.Y, thickness, rect.Height));
+        var right = DetectionGeometry.CountEdges(edges, new Rect(rect.Right - thickness, rect.Y, thickness, rect.Height));
+        var horizontal = (top + bottom) / (2.0 * rect.Width * thickness);
+        var vertical = (left + right) / (2.0 * rect.Height * thickness);
+        return Math.Clamp((horizontal + vertical) * 0.5 * 2.2, 0, 1);
+    }
+
+    internal static double MeasureTolerantRectangleGeometry(Mat edges, Rect rect)
+    {
         rect = DetectionGeometry.ClampRect(rect, edges.Width, edges.Height);
         var thickness = GetBoundaryThickness(rect);
         var tolerance = GetBoundaryTolerance(rect);
@@ -25,13 +54,10 @@ internal static class CandidateScorer
         var bottom = MeasureBestSideCoverage(edges, rect, thickness, tolerance, true, false);
         var left = MeasureBestSideCoverage(edges, rect, thickness, tolerance, false, true);
         var right = MeasureBestSideCoverage(edges, rect, thickness, tolerance, false, false);
-
-        // A good rectangle needs all four sides. A few pixels of alignment
-        // error should not make an otherwise supported side disappear.
         return Math.Clamp(Math.Min(Math.Min(top, bottom), Math.Min(left, right)) * 3.0, 0, 1);
     }
 
-    internal static double MeasureBoundaryContinuity(Mat edges, Rect rect)
+    internal static double MeasureTolerantBoundaryContinuity(Mat edges, Rect rect)
     {
         rect = DetectionGeometry.ClampRect(rect, edges.Width, edges.Height);
         var thickness = GetBoundaryThickness(rect);
