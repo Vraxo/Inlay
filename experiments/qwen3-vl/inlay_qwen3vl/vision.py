@@ -300,14 +300,16 @@ def generate_candidates(
     original_size = image.size
     x_peaks = _find_peaks(
         analysis.profile_x,
-        count=24,
+        count=18,
         minimum_distance=max(4, round(analysis.width * 0.01)),
     )
     y_peaks = _find_peaks(
         analysis.profile_y,
-        count=28,
+        count=20,
         minimum_distance=max(4, round(analysis.height * 0.008)),
     )
+    if float(np.max(analysis.profile_x)) < 2.0 or float(np.max(analysis.profile_y)) < 2.0:
+        return []
 
     candidates: list[RectangleCandidate] = []
     seen: set[tuple[int, int, int, int]] = set()
