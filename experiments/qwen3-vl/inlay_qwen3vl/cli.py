@@ -20,7 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--model",
-        default=os.environ.get("INLAY_QWEN_MODEL", "qwen3vl-8b-thinking"),
+        default=os.environ.get("INLAY_QWEN_MODEL", "qwen3vl-8b"),
         help="API model identifier to assign when loading the local model.",
     )
     parser.add_argument(
