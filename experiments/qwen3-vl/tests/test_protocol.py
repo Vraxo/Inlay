@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from inlay_qwen3vl.protocol import parse_candidate_selection
@@ -33,7 +35,7 @@ def test_rejects_candidate_ids_outside_the_proposal_list(candidate_id):
 def test_rejects_non_integer_candidate_ids(candidate_id):
     with pytest.raises(ValueError, match="'candidate_id' must be an integer"):
         parse_candidate_selection(
-            f'{{"candidate_id": {candidate_id!r}, "reason": "Invalid"}}',
+            json.dumps({"candidate_id": candidate_id, "reason": "Invalid"}),
             4,
         )
 
