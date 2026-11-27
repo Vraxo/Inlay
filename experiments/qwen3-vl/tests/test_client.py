@@ -1,3 +1,4 @@
+from copy import deepcopy
 from unittest.mock import Mock, patch
 
 from PIL import Image
@@ -53,7 +54,18 @@ def test_retries_without_schema_when_lm_studio_rejects_it(post):
     rejected.reason = "Bad Request"
     rejected.text = "response_format json_schema is not supported"
 
-    post.side_effect = [rejected, successful_response()]
+    payloads = []
+
+    def record_request(*, json, **kwargs):
+        payloads.append(deepcopy(json))
+        if len(payloads) == 1:
+            raise __import__("requests").HTTPError(
+                "HTTP 400 Bad Request",
+                response=rejected,
+            )
+        return successful_response()
+
+    post.side_effect = record_request
     client = LMStudioVisionClient(
         "http://localhost:1234/v1/chat/completions",
         "qwen-test",
@@ -62,6 +74,6 @@ def test_retries_without_schema_when_lm_studio_rejects_it(post):
     reply = client.inspect(Image.new("RGB", (100, 100)), None, 1)
 
     assert reply.box == (100, 120, 900, 880)
-    assert post.call_count == 2
-    assert "response_format" in post.call_args_list[0].kwargs["json"]
-    assert "response_format" not in post.call_args_list[1].kwargs["json"]
+    assert len(payloads) == 2
+    assert "response_format" in payloads[0]
+    assert "response_format" not in payloads[1]
