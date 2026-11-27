@@ -55,6 +55,19 @@ def test_matches_a_model_key_with_a_quantization_suffix():
     assert _match_local_model_key("qwen3vl-8b-thinking", keys) == keys[0]
 
 
+def test_generic_qwen3vl_model_prefers_instruct_checkpoint():
+    keys = [
+        "lmstudio-community/Qwen3-VL-8B-Thinking-GGUF",
+        "lmstudio-community/Qwen3-VL-8B-Instruct-GGUF",
+    ]
+    assert _match_local_model_key("qwen3vl-8b", keys) == keys[1]
+
+
+def test_generic_qwen3vl_model_never_substitutes_thinking_checkpoint():
+    keys = ["lmstudio-community/Qwen3-VL-8B-Thinking-GGUF"]
+    assert _match_local_model_key("qwen3vl-8b", keys) is None
+
+
 def test_does_not_guess_when_multiple_exact_local_models_match():
     keys = [
         "qwen/qwen3-vl-8b-thinking",
@@ -99,6 +112,30 @@ def test_automatically_loads_matching_downloaded_model(
 
 
 @patch("inlay_qwen3vl.lmstudio._spawn")
+@patch(
+    "inlay_qwen3vl.lmstudio._local_model_keys",
+    return_value=["lmstudio-community/Qwen3-VL-8B-Thinking-GGUF"],
+)
+@patch("inlay_qwen3vl.lmstudio.requests.get")
+@patch("inlay_qwen3vl.lmstudio._model_is_available", return_value=False)
+def test_explains_when_only_the_thinking_variant_is_downloaded(
+    is_available, get, local_model_keys, spawn
+):
+    get.return_value.ok = True
+    messages = []
+
+    assert not ensure_server_ready(
+        "http://localhost:1234/api/v1/chat",
+        "qwen3vl-8b",
+        report=messages.append,
+    )
+
+    spawn.assert_not_called()
+    assert any("separate model variant" in message for message in messages)
+    assert any("Qwen3-VL-8B" in message and "Instruct" in message for message in messages)
+
+
+@patch("inlay_qwen3vl.lmstudio._spawn")
 @patch("inlay_qwen3vl.lmstudio._local_model_keys", return_value=[])
 @patch("inlay_qwen3vl.lmstudio.requests.get")
 @patch("inlay_qwen3vl.lmstudio._model_is_available", return_value=False)
@@ -108,7 +145,7 @@ def test_reports_when_no_local_llm_matches(is_available, get, local_model_keys, 
 
     assert not ensure_server_ready(
         "http://localhost:1234/api/v1/chat",
-        "qwen3vl-8b-thinking",
+        "qwen3vl-8b",
         report=messages.append,
     )
 
