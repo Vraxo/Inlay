@@ -68,7 +68,7 @@ def _normalise_model_key(value: str) -> str:
 
 
 def _match_local_model_key(model_name: str, model_keys: list[str]) -> str | None:
-    """Match an API model ID to one unambiguous downloaded local model key."""
+    """Match one unambiguous local model, never substituting a Thinking checkpoint."""
     target = _normalise_model_key(model_name)
     if not target:
         return None
@@ -82,13 +82,16 @@ def _match_local_model_key(model_name: str, model_keys: list[str]) -> str | None
     if exact:
         return None
 
-    compatible = [
-        key for key in model_keys
-        if (
-            _normalise_model_key(key).startswith(target)
-            or target.startswith(_normalise_model_key(key))
-        )
-    ]
+    compatible = []
+    for key in model_keys:
+        candidate = _normalise_model_key(key)
+        if not candidate.startswith(target):
+            continue
+        suffix = candidate[len(target):]
+        if "thinking" in suffix or "think" in suffix:
+            continue
+        compatible.append(key)
+
     return compatible[0] if len(compatible) == 1 else None
 
 
@@ -160,6 +163,21 @@ def ensure_server_ready(
 
         model_key = _match_local_model_key(model_name, model_keys)
         if model_key is None:
+            if _normalise_model_key(model_name) == "qwen3vl8b":
+                thinking_keys = [
+                    key for key in model_keys
+                    if _normalise_model_key(key).startswith("qwen3vl8b")
+                    and "thinking" in _normalise_model_key(key)
+                ]
+                if thinking_keys:
+                    report(
+                        "The downloaded Qwen3-VL Thinking checkpoint is a separate model "
+                        "variant. Inlay needs the Qwen3-VL-8B Instruct checkpoint for "
+                        "short, machine-readable crop coordinates."
+                    )
+                    report(
+                        "Download 'Qwen3-VL-8B' (Instruct) in LM Studio, then rerun this command."
+                    )
             report(f"Could not find one unambiguous local model matching '{model_name}'.")
             if model_keys:
                 report("Downloaded LLM model keys:")
