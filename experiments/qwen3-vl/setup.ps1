@@ -1,4 +1,6 @@
 $ErrorActionPreference = "Stop"
+Push-Location $PSScriptRoot
+
 if (-not (Get-Command py -ErrorAction SilentlyContinue)) {
     throw "Python Launcher (py.exe) was not found. Install 64-bit Python 3.12."
 }
@@ -24,6 +26,7 @@ Write-Host ""
 Write-Host "Checking the Python runtime..."
 & $python -c "import requests; import PIL; from inlay_qwen3vl.client import LMStudioVisionClient; from inlay_qwen3vl.runner import run_experiment; print('Requests:', requests.__version__); print('Pillow:', PIL.__version__); print('Qwen 3 VL experiment imports: OK')"
 if ($LASTEXITCODE -ne 0) { throw "The Qwen 3 VL experiment import check failed." }
+Pop-Location
 Write-Host ""
 Write-Host "Setup complete."
 Write-Host "Run: .venv\Scripts\python.exe -m inlay_qwen3vl <image-path>"
