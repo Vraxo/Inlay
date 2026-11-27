@@ -49,10 +49,10 @@ def test_matches_a_model_key_with_a_quantization_suffix():
     assert _match_local_model_key("qwen3vl-8b-thinking", keys) == keys[0]
 
 
-def test_does_not_guess_when_multiple_local_models_match():
+def test_does_not_guess_when_multiple_exact_local_models_match():
     keys = [
         "qwen/qwen3-vl-8b-thinking",
-        "community/qwen3vl-8b-thinking-gguf",
+        "community/qwen3-vl-8b-thinking",
     ]
     assert _match_local_model_key("qwen3vl-8b-thinking", keys) is None
 
