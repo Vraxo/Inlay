@@ -3,9 +3,6 @@ $ErrorActionPreference = "Stop"
 if (-not (Get-Command py -ErrorAction SilentlyContinue)) {
     throw "Python Launcher (py.exe) was not found. Install 64-bit Python 3.12."
 }
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    throw "Git was not found. Install Git for Windows; pip uses it to install Meta's official SAM 3 package."
-}
 
 py -3.12 --version
 if ($LASTEXITCODE -ne 0) {
@@ -37,17 +34,58 @@ if ($LASTEXITCODE -ne 0) { throw "Failed to install experiment dependencies." }
 
 Write-Host ""
 Write-Host "Checking the local Python build tools..."
-& $python -c "import setuptools; from packaging.version import Version; print('setuptools:', setuptools.__version__); assert Version(setuptools.__version__) >= Version('68'), 'setuptools 68 or newer is required.'"
+& $python -m pip install wheel
+if ($LASTEXITCODE -ne 0) { throw "Failed to install the wheel build tool." }
+
+& $python -c "import setuptools, wheel; from packaging.version import Version; print('setuptools:', setuptools.__version__); print('wheel:', wheel.__version__); assert Version(setuptools.__version__) >= Version('68'), 'setuptools 68 or newer is required.'"
 if ($LASTEXITCODE -ne 0) {
-    throw "The environment needs setuptools 68 or newer. Install it into .venv before continuing."
+    throw "The environment needs setuptools 68 or newer and wheel. Check the build-tool installation above."
 }
 
 Write-Host ""
-Write-Host "Installing Meta's official SAM 3 package..."
-Write-Host "Using the existing build tools instead of downloading a temporary isolated build environment."
-& $python -m pip install --no-build-isolation git+https://github.com/facebookresearch/sam3.git
-if ($LASTEXITCODE -ne 0) {
-    throw "Official SAM 3 installation failed. If pip reports a package download or connection error, check access to the Python package index and rerun setup.ps1."
+Write-Host "Downloading Meta's official SAM 3 source archive..."
+# Pin to the current official main revision so setup does not need a Git clone.
+$sam3Commit = "31cb7e624e4fe95301b1be1d4e809111593d2e45"
+$sam3ArchiveUrl = "https://codeload.github.com/facebookresearch/sam3/zip/$sam3Commit"
+$sam3ArchivePath = Join-Path ([IO.Path]::GetTempPath()) "sam3-$sam3Commit.zip"
+$downloaded = $false
+$downloadError = ""
+
+for ($attempt = 1; $attempt -le 3; $attempt++) {
+    try {
+        Invoke-WebRequest -Uri $sam3ArchiveUrl -OutFile $sam3ArchivePath -TimeoutSec 300
+        $archive = Get-Item -LiteralPath $sam3ArchivePath
+        if ($archive.Length -lt 100KB) {
+            throw "The downloaded SAM 3 source archive is unexpectedly small ($($archive.Length) bytes)."
+        }
+        $downloaded = $true
+        break
+    }
+    catch {
+        $downloadError = $_.Exception.Message
+        Remove-Item -LiteralPath $sam3ArchivePath -Force -ErrorAction SilentlyContinue
+        if ($attempt -lt 3) {
+            Write-Warning "SAM 3 source download attempt $attempt failed: $downloadError"
+            Start-Sleep -Seconds (2 * $attempt)
+        }
+    }
+}
+
+if (-not $downloaded) {
+    throw "Could not download Meta's official SAM 3 source archive from $sam3ArchiveUrl after 3 attempts. Check access to codeload.github.com. Details: $downloadError"
+}
+
+Write-Host ""
+Write-Host "Installing Meta's official SAM 3 package from the downloaded source archive..."
+Write-Host "Build isolation is disabled so pip reuses the build tools already installed above."
+try {
+    & $python -m pip install --no-build-isolation $sam3ArchivePath
+    if ($LASTEXITCODE -ne 0) {
+        throw "Official SAM 3 installation failed. Check access to the Python package index for its runtime dependencies."
+    }
+}
+finally {
+    Remove-Item -LiteralPath $sam3ArchivePath -Force -ErrorAction SilentlyContinue
 }
 
 Write-Host ""
@@ -64,4 +102,4 @@ Write-Host "Setup complete."
 Write-Host "Next: .venv\Scripts\hf.exe auth login"
 Write-Host "Then: .venv\Scripts\inlay-sam3.exe <image-path>"
 Write-Host ""
-Write-Host "No CUDA Toolkit, CMake, Visual Studio C++ tools, GGUF model, or native build is needed."
+Write-Host "No Git, CUDA Toolkit, CMake, Visual Studio C++ tools, GGUF model, or native build is needed."
