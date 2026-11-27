@@ -15,7 +15,9 @@ def build_parser() -> argparse.ArgumentParser:
         prog="inlay-qwen3vl",
         description="Find and iteratively verify the foreground image panel in a screenshot.",
     )
-    parser.add_argument("image", type=Path, help="Screenshot or image to inspect.")
+    parser.add_argument(
+        "image", type=Path, help="Screenshot or image to inspect."
+    )
     parser.add_argument(
         "--model",
         default=os.environ.get("INLAY_QWEN_MODEL", "qwen3vl-8b-thinking"),
@@ -25,9 +27,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--api-url",
         default=os.environ.get(
             "INLAY_LMSTUDIO_API_URL",
-            "http://localhost:1234/v1/chat/completions",
+            "http://localhost:1234/api/v1/chat",
         ),
-        help="LM Studio chat-completions endpoint.",
+        help="LM Studio native chat endpoint.",
     )
     parser.add_argument(
         "--lms-executable",

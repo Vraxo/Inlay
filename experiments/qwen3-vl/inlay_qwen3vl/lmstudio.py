@@ -6,12 +6,14 @@ import subprocess
 import sys
 import time
 from typing import Callable
+from urllib.parse import urlsplit
 
 import requests
 
 
 def _api_base(api_url: str) -> str:
-    return api_url.split("/v1/", 1)[0].rstrip("/")
+    parsed = urlsplit(api_url)
+    return f"{parsed.scheme}://{parsed.netloc}"
 
 
 def _model_ids(api_url: str) -> list[str]:
