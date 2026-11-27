@@ -30,17 +30,29 @@ if ($LASTEXITCODE -ne 0) { throw "Failed to upgrade pip." }
 if ($LASTEXITCODE -ne 0) { throw "Failed to install CUDA-enabled PyTorch." }
 
 Write-Host ""
-Write-Host "Installing the experiment and Meta's official SAM 3 package..."
+Write-Host "Installing the experiment dependencies..."
 $requirements = Join-Path $PSScriptRoot "requirements.txt"
 & $python -m pip install -r $requirements
 if ($LASTEXITCODE -ne 0) { throw "Failed to install experiment dependencies." }
 
-& $python -m pip install git+https://github.com/facebookresearch/sam3.git
+Write-Host ""
+Write-Host "Checking the local Python build tools..."
+& $python -c "import setuptools; from packaging.version import Version; print('setuptools:', setuptools.__version__); assert Version(setuptools.__version__) >= Version('68'), 'setuptools 68 or newer is required.'"
 if ($LASTEXITCODE -ne 0) {
-    throw "Official SAM 3 installation failed. Check the Python, pip, and Git errors above."
+    throw "The environment needs setuptools 68 or newer. Install it into .venv before continuing."
 }
 
-& $python -m pip install -e $PSScriptRoot
+Write-Host ""
+Write-Host "Installing Meta's official SAM 3 package..."
+Write-Host "Using the existing build tools instead of downloading a temporary isolated build environment."
+& $python -m pip install --no-build-isolation git+https://github.com/facebookresearch/sam3.git
+if ($LASTEXITCODE -ne 0) {
+    throw "Official SAM 3 installation failed. If pip reports a package download or connection error, check access to the Python package index and rerun setup.ps1."
+}
+
+Write-Host ""
+Write-Host "Installing the Inlay command..."
+& $python -m pip install --no-build-isolation -e $PSScriptRoot
 if ($LASTEXITCODE -ne 0) { throw "Failed to install the Inlay SAM 3 command." }
 
 Write-Host ""
