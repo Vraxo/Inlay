@@ -74,6 +74,10 @@ The manifest stores source-image paths relative to itself and the expected crop 
 
 The command reports candidate recall, crop overlap (IoU), automatic-extraction success, and false positives. It writes inlay-benchmark-results.json beside the manifest. Positive cases pass only when the detector automatically extracts a crop that meets the IoU target; negative cases pass only when no candidate is returned. Each expected rectangle must be labelled once, after which the same private set can be rerun after every detector change.
 
+## Optional local Qwen 3 VL experiment
+
+For an iterative visual-grounding experiment, see [experiments/qwen3-vl](experiments/qwen3-vl/README.md). It sends the original screenshot to the Qwen model served by local LM Studio, asks for a full-panel rectangle, crops original pixels with Pillow, then sends the outlined candidate back to Qwen for review. It uses a separate lightweight Python environment and does not install PyTorch or download model weights. Images are sent only to the configured LM Studio endpoint.
+
 ## Optional local SAM 3.1 experiment
 
 For an AI segmentation experiment, see [experiments/sam3-python](experiments/sam3-python/README.md). It uses Meta's official SAM 3.1 Python implementation and PyTorch locally; it does not require the C++/GGUF runtime. Hugging Face access to the official facebook/sam3.1 checkpoint is required. The experiment is separate from the current .NET detector and browser app.
@@ -94,7 +98,7 @@ The shared image-processing code lives in src/Inlay.Core; the CLI and browser ap
 
 ## Privacy
 
-The browser app processes images locally using WebAssembly. The CLI processes images locally as well. Neither sends image data to a server.
+The browser app processes images locally using WebAssembly. The CLI processes images locally as well. Neither sends image data to a server. The optional Qwen experiment sends image data to the LM Studio API server configured by the user, normally running on the same machine.
 
 ## Current limitations
 
