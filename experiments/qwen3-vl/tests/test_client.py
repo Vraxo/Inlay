@@ -56,7 +56,7 @@ def test_retries_without_schema_when_lm_studio_rejects_it(post):
 
     payloads = []
 
-    def record_request(*, json, **kwargs):
+    def record_request(url, *, json, **kwargs):
         payloads.append(deepcopy(json))
         if len(payloads) == 1:
             raise __import__("requests").HTTPError(
