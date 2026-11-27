@@ -3,10 +3,16 @@ import subprocess
 from unittest.mock import Mock, patch
 
 from inlay_qwen3vl.lmstudio import (
+    _api_base,
     _local_model_keys,
     _match_local_model_key,
     ensure_server_ready,
 )
+
+
+def test_api_base_supports_native_and_compatible_chat_endpoints():
+    assert _api_base("http://localhost:1234/api/v1/chat") == "http://localhost:1234"
+    assert _api_base("http://localhost:1234/v1/chat/completions") == "http://localhost:1234"
 
 
 def test_lists_downloaded_llm_model_keys_from_lms_json():
@@ -74,7 +80,7 @@ def test_automatically_loads_matching_downloaded_model(
     spawn.return_value = Mock()
 
     assert ensure_server_ready(
-        "http://localhost:1234/v1/chat/completions",
+        "http://localhost:1234/api/v1/chat",
         "qwen3vl-8b-thinking",
         report=lambda _: None,
     )
@@ -101,7 +107,7 @@ def test_reports_when_no_local_llm_matches(is_available, get, local_model_keys, 
     messages = []
 
     assert not ensure_server_ready(
-        "http://localhost:1234/v1/chat/completions",
+        "http://localhost:1234/api/v1/chat",
         "qwen3vl-8b-thinking",
         report=messages.append,
     )
@@ -124,7 +130,7 @@ def test_explicit_local_model_key_overrides_auto_discovery(
     spawn.return_value = Mock()
 
     assert ensure_server_ready(
-        "http://localhost:1234/v1/chat/completions",
+        "http://localhost:1234/api/v1/chat",
         "qwen3vl-8b-thinking",
         load_model="custom/qwen-vl-model",
         report=lambda _: None,
