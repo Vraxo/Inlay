@@ -13,6 +13,8 @@ from .geometry import Box1000, box_1000_to_pixels
 from .protocol import ModelReply, parse_reply
 
 
+MAX_OUTPUT_TOKENS = 4096
+
 SYSTEM_PROMPT = """You are Inlay's image-boundary locator.
 
 Find the OUTER RECTANGLE of the complete foreground photograph or rectangular
@@ -98,12 +100,29 @@ class LMStudioVisionClient:
             "system_prompt": SYSTEM_PROMPT,
             "input": request_input,
             "temperature": 0.1,
-            "max_output_tokens": 1024,
+            "max_output_tokens": MAX_OUTPUT_TOKENS,
             "reasoning": "off",
             "store": False,
         }
 
-        response = self._post_with_retries(payload)
+        try:
+            response = self._post_with_retries(payload)
+        except requests.HTTPError as error:
+            failed_response = error.response
+            details = failed_response.text if failed_response is not None else str(error)
+            if (
+                failed_response is None
+                or failed_response.status_code not in (400, 422)
+                or "reasoning" not in details.casefold()
+            ):
+                raise
+            self.report(
+                "This LM Studio model rejected the reasoning-off setting; "
+                "retrying with its default reasoning mode and a larger output budget."
+            )
+            payload.pop("reasoning")
+            response = self._post_with_retries(payload)
+
         try:
             response_data = response.json()
             output = response_data["output"]
