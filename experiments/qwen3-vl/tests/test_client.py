@@ -48,11 +48,41 @@ def test_initial_request_uses_native_chat_and_bounded_output(post):
     assert payload["max_output_tokens"] == MAX_OUTPUT_TOKENS == 1024
     assert "reasoning" not in payload
     assert payload["store"] is False
-    assert payload["system_prompt"]
+    assert "bbox_pixels_xyxy" in payload["system_prompt"]
+    assert "FULL-RESOLUTION ORIGINAL screenshot" in payload["system_prompt"]
     assert len(request_input) == 2
     assert request_input[0]["type"] == "text"
+    assert "640 x 480 pixels" in request_input[0]["content"]
+    assert "pixel coordinates" in request_input[0]["content"]
     assert request_input[1]["type"] == "image"
     assert request_input[1]["data_url"].startswith("data:image/png;base64,")
+
+
+@patch("inlay_qwen3vl.client.requests.post")
+def test_parses_pixel_coordinates_from_a_smaller_vision_model(post):
+    response = patch_response()
+    response.json.return_value = {
+        "output": [
+            {
+                "type": "message",
+                "content": (
+                    '{"done": false, "bbox_1000": [3, 56, 923, 1748], '
+                    '"reason": "The photo is overlaid on the phone interface."}'
+                ),
+            }
+        ],
+        "stats": {
+            "total_output_tokens": 61,
+            "reasoning_output_tokens": 0,
+        },
+    }
+    post.return_value = response
+
+    client = LMStudioVisionClient("http://localhost:1234/api/v1/chat", "qwen-test")
+    reply = client.inspect(Image.new("RGB", (1080, 2400)), None, 1)
+
+    assert reply.done is False
+    assert reply.box == (3, 23, 855, 728)
 
 
 @patch("inlay_qwen3vl.client.requests.post")
@@ -108,6 +138,7 @@ def test_review_request_sends_original_overlay_and_candidate(post):
 
     request_input = post.call_args.kwargs["json"]["input"]
     assert sum(item["type"] == "image" for item in request_input) == 3
+    assert "full-resolution original screenshot" in request_input[0]["content"]
 
 
 @patch("inlay_qwen3vl.client.requests.post")
