@@ -94,10 +94,10 @@ Write-Host "Installing the Inlay command..."
 if ($LASTEXITCODE -ne 0) { throw "Failed to install the Inlay SAM 3 command." }
 
 Write-Host ""
-Write-Host "Checking the Triton runtime..."
-& $python -c "import triton; print('Triton:', triton.__version__)"
+Write-Host "Checking the SAM 3 support runtimes..."
+& $python -c "import psutil, triton; print('Triton:', triton.__version__); print('psutil:', psutil.__version__)"
 if ($LASTEXITCODE -ne 0) {
-    throw "The Windows Triton runtime is missing or could not be loaded."
+    throw "A required SAM 3 runtime dependency is missing or could not be loaded."
 }
 
 Write-Host ""
