@@ -12,6 +12,7 @@ dependencies = [
     "Pillow>=10.0",
     "einops @ https://files.pythonhosted.org/packages/2a/09/f8d8f8f31e4483c10a906437b4ce31bdf3d6d417b73fe33f1a8b59e34228/einops-0.8.2-py3-none-any.whl#sha256=54058201ac7087911181bfec4af6091bb59380360f069276601256a76af08193",
     "triton-windows @ https://files.pythonhosted.org/packages/62/1e/8d9814e67ba3f20094cf3c69e7815a491f20beb86469a647550ba86728b0/triton_windows-3.6.0.post26-cp312-cp312-win_amd64.whl#sha256=189d8c57911aa9d2ff983a715e5c967b325f576307db60924cab22b501a36515 ; sys_platform == 'win32' and python_version == '3.12' and platform_machine == 'AMD64'",
+    "psutil @ https://files.pythonhosted.org/packages/b4/90/e2159492b5426be0c1fef7acba807a03511f97c5f86b3caeda6ad92351a7/psutil-7.2.2-cp37-abi3-win_amd64.whl#sha256=eb7e81434c8d223ec4a219b5fc1c47d0417b12be7ea866e24fb5ad6e84b3d988 ; sys_platform == 'win32' and python_version == '3.12' and platform_machine == 'AMD64'",
 ]
 
 [project.optional-dependencies]
