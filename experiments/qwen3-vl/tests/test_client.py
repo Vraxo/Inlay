@@ -1,5 +1,5 @@
 from copy import deepcopy
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from PIL import Image
 
@@ -7,73 +7,122 @@ from inlay_qwen3vl.client import LMStudioVisionClient
 
 
 def successful_response():
-    response = Mock()
-    response.ok = True
-    response.status_code = 200
-    response.text = ""
+    response = patch_response()
     response.json.return_value = {
-        "choices": [{
-            "message": {
-                "content": '{"done": false, "bbox_1000": [100, 120, 900, 880], "reason": "Located"}',
-                "reasoning_content": "",
+        "output": [
+            {
+                "type": "message",
+                "content": (
+                    '{"done": false, "bbox_1000": [100, 120, 900, 880], '
+                    '"reason": "Located the full image panel."}'
+                ),
             }
-        }]
+        ],
+        "stats": {
+            "total_output_tokens": 42,
+            "reasoning_output_tokens": 0,
+        },
     }
     return response
 
 
+def patch_response():
+    from unittest.mock import Mock
+
+    response = Mock()
+    response.ok = True
+    response.status_code = 200
+    response.text = ""
+    return response
+
+
 @patch("inlay_qwen3vl.client.requests.post")
-def test_initial_request_sends_one_image_and_structured_output(post):
+def test_initial_request_uses_native_chat_reasoning_off_and_one_image(post):
     post.return_value = successful_response()
-    client = LMStudioVisionClient("http://localhost:1234/v1/chat/completions", "qwen-test")
+    client = LMStudioVisionClient("http://localhost:1234/api/v1/chat", "qwen-test")
     reply = client.inspect(Image.new("RGB", (640, 480)), None, 1)
 
     payload = post.call_args.kwargs["json"]
-    content = payload["messages"][1]["content"]
+    request_input = payload["input"]
     assert reply.box == (100, 120, 900, 880)
-    assert payload["response_format"]["type"] == "json_schema"
-    assert sum(part["type"] == "image_url" for part in content) == 1
-    assert content[1]["image_url"]["url"].startswith("data:image/png;base64,")
+    assert payload["reasoning"] == "off"
+    assert payload["max_output_tokens"] == 1024
+    assert payload["store"] is False
+    assert payload["system_prompt"]
+    assert len(request_input) == 2
+    assert request_input[0]["type"] == "text"
+    assert request_input[1]["type"] == "image"
+    assert request_input[1]["data_url"].startswith("data:image/png;base64,")
 
 
 @patch("inlay_qwen3vl.client.requests.post")
 def test_review_request_sends_original_overlay_and_candidate(post):
     post.return_value = successful_response()
-    client = LMStudioVisionClient("http://localhost:1234/v1/chat/completions", "qwen-test")
+    client = LMStudioVisionClient("http://localhost:1234/api/v1/chat", "qwen-test")
     client.inspect(Image.new("RGB", (640, 480)), (100, 100, 900, 900), 2)
 
-    content = post.call_args.kwargs["json"]["messages"][1]["content"]
-    assert sum(part["type"] == "image_url" for part in content) == 3
+    request_input = post.call_args.kwargs["json"]["input"]
+    assert sum(item["type"] == "image" for item in request_input) == 3
 
 
 @patch("inlay_qwen3vl.client.requests.post")
-def test_retries_without_schema_when_lm_studio_rejects_it(post):
-    rejected = Mock()
-    rejected.ok = False
-    rejected.status_code = 400
-    rejected.reason = "Bad Request"
-    rejected.text = "response_format json_schema is not supported"
-
-    payloads = []
-
-    def record_request(url, *, json, **kwargs):
-        payloads.append(deepcopy(json))
-        if len(payloads) == 1:
-            raise __import__("requests").HTTPError(
-                "HTTP 400 Bad Request",
-                response=rejected,
-            )
-        return successful_response()
-
-    post.side_effect = record_request
-    client = LMStudioVisionClient(
-        "http://localhost:1234/v1/chat/completions",
-        "qwen-test",
-        report=lambda _: None,
+def test_reads_a_json_answer_even_when_reasoning_is_also_returned(post):
+    response = successful_response()
+    response.json.return_value["output"].insert(
+        0,
+        {"type": "reasoning", "content": "Brief image analysis."},
     )
+    post.return_value = response
+
+    client = LMStudioVisionClient("http://localhost:1234/api/v1/chat", "qwen-test")
     reply = client.inspect(Image.new("RGB", (100, 100)), None, 1)
 
     assert reply.box == (100, 120, 900, 880)
-    assert len(payloads) == 2
-    assert "response_format" in payloads[0]
-    assert "response_format" not in payloads[1]
+    assert reply.done is False
+
+
+@patch("inlay_qwen3vl.client.requests.post")
+def test_reports_when_native_api_returns_only_incomplete_reasoning(post):
+    response = successful_response()
+    response.json.return_value = {
+        "output": [
+            {"type": "reasoning", "content": "The screenshot shows a centered image panel..."}
+        ],
+        "stats": {
+            "total_output_tokens": 1024,
+            "reasoning_output_tokens": 1024,
+        },
+    }
+    post.return_value = response
+
+    client = LMStudioVisionClient("http://localhost:1234/api/v1/chat", "qwen-test")
+    try:
+        client.inspect(Image.new("RGB", (100, 100)), None, 1)
+    except RuntimeError as error:
+        message = str(error)
+        assert "did not return a valid crop rectangle" in message
+        assert "reasoning tokens: 1024" in message
+    else:
+        raise AssertionError("Expected incomplete reasoning to be rejected.")
+
+
+@patch("inlay_qwen3vl.client.requests.post")
+def test_retries_transient_server_errors(post):
+    response = successful_response()
+    failed = patch_response()
+    failed.ok = False
+    failed.status_code = 503
+    failed.reason = "Service Unavailable"
+    failed.text = "temporarily unavailable"
+    post.side_effect = [failed, response]
+
+    client = LMStudioVisionClient(
+        "http://localhost:1234/api/v1/chat",
+        "qwen-test",
+        report=lambda _: None,
+    )
+    with patch("inlay_qwen3vl.client.time.sleep"):
+        reply = client.inspect(Image.new("RGB", (100, 100)), None, 1)
+
+    assert reply.box == (100, 120, 900, 880)
+    assert post.call_count == 2
