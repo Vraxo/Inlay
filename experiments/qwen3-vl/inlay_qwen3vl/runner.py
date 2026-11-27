@@ -64,6 +64,13 @@ def run_experiment(
         raise ValueError("At least two iterations are required for visual verification.")
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    for name in ("crop.png", "candidate.png", "overlay.png", "report.json"):
+        stale = output_dir / name
+        if stale.exists():
+            stale.unlink()
+    for stale in output_dir.glob("iteration-*-*.png"):
+        stale.unlink()
+
     image = _load_image(image_path)
     current_box: Box1000 | None = None
     iterations: list[dict[str, Any]] = []
@@ -114,11 +121,13 @@ def run_experiment(
 
     overlay_path, candidate_path = _save_diagnostics(image, current_box, output_dir)
     accepted = status == "accepted"
-    final_crop_path = output_dir / ("crop.png" if accepted else "candidate.png")
-    candidate_path.replace(final_crop_path)
-    final_overlay_path = output_dir / "overlay.png"
-    overlay_path.replace(final_overlay_path)
+    if accepted:
+        final_crop_path = output_dir / "crop.png"
+        candidate_path.replace(final_crop_path)
+    else:
+        final_crop_path = candidate_path
 
+    final_overlay_path = overlay_path
     result = {
         "input": str(image_path.resolve()),
         "image_size": {"width": image.width, "height": image.height},
