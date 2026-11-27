@@ -8,7 +8,7 @@ It is deliberately separate from Inlay's .NET detector and the SAM 3.1 experimen
 
 1. Start the LM Studio local API server if it is not already running.
 2. Check whether the configured Qwen model is loaded. If not, inspect downloaded LLMs using lms ls --llm --json, find the matching local model key, and load it with the configured API identifier.
-3. Send the screenshot to Qwen 3 VL through LM Studio's native `/api/v1/chat` endpoint, requesting reasoning-off mode when the model supports it.
+3. Send the screenshot to the Qwen3-VL Instruct model through LM Studio's native `/api/v1/chat` endpoint.
 4. Ask for the outer rectangle of the complete foreground image panel as a compact JSON object.
 5. Convert the returned normalized coordinates into pixel coordinates and create a crop from the original, full-resolution image using Pillow.
 6. Send Qwen the original screenshot, a preview with the current rectangle drawn over it, and the extracted crop.
@@ -24,7 +24,7 @@ A model's done response is only its own assessment, not proof of correctness. In
 - 64-bit Python 3.12
 - A current LM Studio version with the native REST chat API
 - LM Studio installed
-- The Qwen 3 VL model downloaded in LM Studio
+- The Qwen3-VL-8B Instruct model downloaded in LM Studio
 - The LM Studio lms CLI available on PATH if the script should start the server or load a model automatically
 
 From this directory in PowerShell:
@@ -33,32 +33,40 @@ From this directory in PowerShell:
 
 This creates a separate .venv and installs only Requests, Pillow, and pytest. It does not touch experiments/sam3-python/.venv.
 
+## Model choice
+
+**Use Qwen3-VL-8B Instruct, not Qwen3-VL-8B Thinking.**
+
+Qwen publishes these as separate checkpoints. The Thinking checkpoint is a reasoning-enhanced variant, not the Instruct checkpoint with a toggle that can reliably be switched off. It can spend the entire output-token budget reasoning without returning the compact JSON needed by this experiment.
+
+In LM Studio, search for **Qwen3-VL-8B** (catalog model key `qwen/qwen3-vl-8b`). Its available GGUF and MLX source files are the Instruct variant. Do not select the separately named Qwen3-VL-8B-Thinking model.
+
+The model must already be downloaded; the experiment does not fetch large model weights automatically.
+
 ## Run
 
-With the model downloaded in LM Studio:
+With the Instruct model downloaded in LM Studio:
 
     .\.venv\Scripts\python.exe -m inlay_qwen3vl C:\path\to\screenshot.jpg
 
-The default API identifier matches WallpaperNamer:
+The default API identifier is:
 
-    qwen3vl-8b-thinking
+    qwen3vl-8b
 
-When that model is not already loaded, Inlay searches downloaded LLM model keys and loads the unique matching model automatically. It assigns the API identifier above so the chat request uses the expected name. The model must already be downloaded; the experiment does not fetch large model weights automatically.
-
-The native API request asks LM Studio to disable reasoning and allows up to 4096 output tokens. If LM Studio explicitly rejects the reasoning setting for the selected model, Inlay retries without that setting so the model can use its default reasoning mode without immediately exhausting the previous 1024-token limit.
+When that model is not already loaded, Inlay searches downloaded LLM model keys and loads the matching Instruct model automatically. It will not silently substitute a model whose key identifies it as a Thinking checkpoint.
 
 If the local model key cannot be matched automatically, list downloaded LLMs with:
 
     lms ls --llm
 
-Then supply the exact key shown by LM Studio:
+Then supply the exact Instruct model key shown by LM Studio:
 
-    .\.venv\Scripts\python.exe -m inlay_qwen3vl screenshot.jpg --load-model <exact-model-key>
+    .\.venv\Scripts\python.exe -m inlay_qwen3vl screenshot.jpg --load-model <exact-instruct-model-key>
 
 Useful options:
 
-- --model qwen3vl-8b-thinking — API identifier assigned to the loaded model
-- --load-model <exact-model-key> — override automatic local-model discovery
+- --model qwen3vl-8b — API identifier assigned to the loaded model
+- --load-model <exact-instruct-model-key> — override automatic local-model discovery
 - --max-iterations 5 — maximum number of model refinement rounds (minimum 2)
 - --output <directory> — diagnostics output directory
 - --api-url http://localhost:1234/api/v1/chat — LM Studio native chat endpoint
