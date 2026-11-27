@@ -8,7 +8,7 @@ It is deliberately separate from Inlay's .NET detector and the SAM 3.1 experimen
 
 1. Start the LM Studio local API server if it is not already running.
 2. Check whether the configured Qwen model is loaded. If not, inspect downloaded LLMs using lms ls --llm --json, find the matching local model key, and load it with the configured API identifier.
-3. Send the screenshot to Qwen 3 VL through LM Studio's native `/api/v1/chat` endpoint with reasoning disabled for this coordinate-extraction task.
+3. Send the screenshot to Qwen 3 VL through LM Studio's native `/api/v1/chat` endpoint, requesting reasoning-off mode when the model supports it.
 4. Ask for the outer rectangle of the complete foreground image panel as a compact JSON object.
 5. Convert the returned normalized coordinates into pixel coordinates and create a crop from the original, full-resolution image using Pillow.
 6. Send Qwen the original screenshot, a preview with the current rectangle drawn over it, and the extracted crop.
@@ -45,7 +45,7 @@ The default API identifier matches WallpaperNamer:
 
 When that model is not already loaded, Inlay searches downloaded LLM model keys and loads the unique matching model automatically. It assigns the API identifier above so the chat request uses the expected name. The model must already be downloaded; the experiment does not fetch large model weights automatically.
 
-The native API request sets `reasoning: "off"` so the model spends its output budget on the requested rectangle instead of a long explanation. LM Studio must support reasoning controls for the selected model.
+The native API request asks LM Studio to disable reasoning and allows up to 4096 output tokens. If LM Studio explicitly rejects the reasoning setting for the selected model, Inlay retries without that setting so the model can use its default reasoning mode without immediately exhausting the previous 1024-token limit.
 
 If the local model key cannot be matched automatically, list downloaded LLMs with:
 
