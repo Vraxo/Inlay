@@ -15,7 +15,7 @@ From this directory in PowerShell, run:
 
     .\setup.ps1
 
-The script creates a local .venv, installs PyTorch with the CUDA 12.8 runtime, and installs Meta's official SAM 3 source archive plus the Inlay runner. The source archive is downloaded over HTTPS from GitHub's archive host; Git itself is not used.
+The script creates a local .venv, installs PyTorch with the CUDA 12.8 runtime, and installs Meta's official SAM 3 source archive plus the Inlay runner. The source archive is downloaded over HTTPS from GitHub's archive host; Git itself is not used. The small, pure-Python `einops` dependency is installed from its pinned official wheel URL with a SHA-256 check, without querying the PyPI package index.
 
 **You do not need to install Git, the CUDA Toolkit, CMake, Visual Studio C++ Build Tools, or any separate native compiler.** PyTorch's CUDA wheel includes the runtime libraries; an NVIDIA driver is still required for GPU inference. If CUDA is unavailable, the runner falls back to CPU, which can be very slow.
 
