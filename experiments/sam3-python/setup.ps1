@@ -94,6 +94,13 @@ Write-Host "Installing the Inlay command..."
 if ($LASTEXITCODE -ne 0) { throw "Failed to install the Inlay SAM 3 command." }
 
 Write-Host ""
+Write-Host "Checking the SAM 3 inference imports..."
+& $python -c "from sam3.model_builder import build_sam3_image_model, download_ckpt_from_hf; from sam3.model.sam3_image_processor import Sam3Processor; print('SAM 3 inference imports: OK')"
+if ($LASTEXITCODE -ne 0) {
+    throw "SAM 3 was installed, but its inference imports failed. Review the missing dependency or import error above."
+}
+
+Write-Host ""
 & $python -c "import torch; print('PyTorch:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU fallback')"
 if ($LASTEXITCODE -ne 0) { throw "The PyTorch installation check failed." }
 
