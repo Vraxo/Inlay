@@ -1,41 +1,39 @@
-# Inlay — Qwen 3 VL crop-refinement experiment
+# Inlay — hybrid OpenCV and Qwen foreground-panel experiment
 
-This experiment tests whether Qwen 3 VL through LM Studio, combined with a small Python crop-and-review loop, can identify the complete foreground photo/image panel in a screenshot.
+This experiment tests a hybrid approach to locating the complete foreground photo/image panel in a screenshot. OpenCV proposes rectangles from coherent image edges and contours, Qwen selects the semantically correct proposal, and Python performs the final pixel crop plus a small local edge refinement.
 
-It is deliberately separate from Inlay's .NET detector and the SAM 3.1 experiment. It does not install PyTorch, download model weights, or change either existing implementation.
+It is deliberately separate from Inlay's .NET detector and the SAM 3 experiment. It does not install PyTorch or download model weights.
 
-## How it works
+## Pipeline
 
 1. Start the LM Studio local API server if it is not already running.
-2. Check whether the configured Qwen model is loaded. If not, inspect downloaded LLMs using lms ls --llm --json, find the matching local model key, and load it with the configured API identifier.
-3. Send the screenshot to the Qwen vision-language model through LM Studio's native `/api/v1/chat` endpoint.
-4. Ask for the outer rectangle of the complete foreground image panel as compact JSON containing pixel coordinates relative to the full-resolution original screenshot.
-5. Convert the returned pixel coordinates into normalized coordinates and create a crop from the original, full-resolution image using Pillow.
-6. Send Qwen the original screenshot, a preview with the current rectangle drawn over it, and the extracted crop.
-7. Ask Qwen to verify the crop or adjust its rectangle. Stop when it explicitly confirms an unchanged rectangle, when the model stops making progress, when four recent proposals form a highly overlapping stable cluster, or when the iteration limit is reached.
-8. Save the crop candidate, visual diagnostics, and a JSON report.
+2. Ensure the selected vision-language model is available. If it is not loaded, Inlay can discover and load its local model key.
+3. Load the original screenshot with Pillow and correct its EXIF orientation.
+4. OpenCV computes horizontal and vertical Sobel gradients, builds long-edge projection profiles, and finds large closed-contour rectangles.
+5. The detector combines the strongest coherent edge pair with other high-scoring geometric candidates. Candidate scoring considers four-edge support, projection strength, area, and centrality.
+6. Python draws numbered candidate rectangles on a second image and sends the original plus that overview to Qwen through LM Studio's native `/api/v1/chat` endpoint.
+7. Qwen returns only a candidate ID. It does not generate or estimate coordinates.
+8. Python maps the selected candidate back to original pixels, performs local Sobel edge snapping, and creates the crop and overlay.
 
-Python validates the pixel rectangle against the original image dimensions. The model never reconstructs or redraws the image.
-
-A model's `done` response is only its own assessment, not proof of correctness. A stable candidate is not an accepted crop: it means the last four proposals had pairwise intersection-over-union (IoU) of at least 0.95. In that case, Inlay uses the coordinate-wise median of those four rectangles to reduce small coordinate jitter, but leaves the result as `candidate.png` for visual inspection.
+The model's responsibility is semantic selection. Rectangle geometry, validation, refinement, and pixel extraction are performed by Python/OpenCV/Pillow.
 
 ## Requirements
 
 - 64-bit Python 3.12
 - A current LM Studio version with the native REST chat API
 - LM Studio installed
-- The target vision-language model downloaded in LM Studio
-- The LM Studio lms CLI available on PATH if the script should start the server or load a model automatically
+- A vision-language model downloaded in LM Studio
+- The LM Studio `lms` CLI available on PATH if the script should start the server or load a model automatically
 
 From this directory in PowerShell:
 
     .\setup.ps1
 
-This creates a separate .venv and installs only Requests, Pillow, and pytest. It does not touch experiments/sam3-python/.venv.
+This creates a separate `.venv` and installs Requests, Pillow, NumPy, headless OpenCV, and pytest. It does not touch `experiments/sam3-python/.venv`.
 
 ## Model choice
 
-Qwen3-VL-8B Instruct is the default recommendation. Qwen3-VL-8B Thinking is a separate reasoning-oriented checkpoint and may spend its output budget reasoning without returning the compact JSON needed by this experiment. Other vision-language Instruct models can also be selected explicitly, such as Qwen2.5-VL-3B Instruct.
+Qwen3-VL-8B Instruct is the default recommendation. Qwen3-VL-8B Thinking is a separate reasoning-oriented checkpoint and may spend its output budget reasoning without returning the compact candidate selection needed by this experiment. Other vision-language Instruct models can also be selected explicitly, such as Qwen2.5-VL-3B Instruct.
 
 The model must already be downloaded; the experiment does not fetch large model weights automatically.
 
@@ -49,15 +47,15 @@ The default API identifier is:
 
     qwen3vl-8b
 
-When that model is not already loaded, Inlay searches downloaded LLM model keys and loads the matching model automatically. For a different local vision-language model, set its API identifier and exact local model key:
+For another local vision-language model:
 
     .\.venv\Scripts\python.exe -m inlay_qwen3vl screenshot.jpg --model qwen2.5-vl-3b-instruct --load-model qwen2.5-vl-3b-instruct
 
 Useful options:
 
-- `--model <identifier>` — API identifier assigned to the loaded model
+- `--model <identifier>` — API model identifier assigned to the loaded model
 - `--load-model <exact-local-model-key>` — override automatic local-model discovery
-- `--max-iterations 5` — maximum number of model refinement passes (minimum 2)
+- `--max-candidates 8` — maximum number of OpenCV proposals shown to Qwen
 - `--output <directory>` — diagnostics output directory (default: <image-name>.qwen3vl)
 - `--api-url http://localhost:1234/api/v1/chat` — LM Studio native chat endpoint
 - `--max-image-dimension 2048` — maximum side length of images sent to Qwen
@@ -66,22 +64,21 @@ You can also configure INLAY_QWEN_MODEL, INLAY_LMSTUDIO_API_URL, INLAY_LMS_EXECU
 
 ## Output
 
-By default, the experiment creates a directory named <image-name>.qwen3vl beside the input image. It contains:
+By default, the experiment creates a directory named `<image-name>.qwen3vl` beside the input image. It contains:
 
-- `crop.png` when Qwen explicitly confirms an unchanged rectangle on a later review
-- `candidate.png` when a rectangle is found but not explicitly confirmed, including stable consensus candidates
-- `overlay.png` with the final rectangle drawn over the original screenshot
-- `iteration-XX-overlay.png` and `iteration-XX-candidate.png` for each round
-- `report.json` with the model's responses, rectangles, iteration status, stability metrics, and output paths
+- `candidate.png` — selected and edge-refined photo candidate
+- `overlay.png` — selected rectangle drawn over the original screenshot
+- `proposals.png` — all numbered OpenCV candidates shown to Qwen
+- `report.json` — candidate geometry scores, Qwen selection, refinement offsets, and output paths
 
-An unconfirmed candidate is intentionally not named `crop.png`. Even a model-confirmed result is not a measured accuracy guarantee; compare results with labelled ground truth before considering automatic extraction reliable.
+The experiment deliberately does not create `crop.png` or mark a result accepted automatically. Inspect `overlay.png` and `candidate.png` before using the result. A good computer-vision score or model selection is not an accuracy guarantee.
 
 ## Tests
 
-The tests use synthetic images and a fake model client. They do not require LM Studio or a downloaded model:
+The tests use synthetic screenshots and mocked LM Studio responses. They do not require a running server or a downloaded model:
 
     .\.venv\Scripts\python.exe -m pytest -q
 
-## Current scope
+## Scope
 
-This experiment measures the quality of Qwen's rectangle proposal and iterative visual verification. It uses Pillow for exact pixel extraction but does not yet apply OpenCV edge snapping or other classical-CV boundary refinement. That should be added only after the raw Qwen results show where such refinement would help.
+This version uses classical OpenCV edge and contour analysis to generate rectangular proposals. It does not use a trained segmentation model or infer a pixel mask. Add more complex segmentation only if measured examples show that edge-based candidates are insufficient.
