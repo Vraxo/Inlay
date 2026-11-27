@@ -13,7 +13,7 @@ from .runner import run_experiment
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="inlay-qwen3vl",
-        description="Find and iteratively verify the foreground image panel in a screenshot.",
+        description="Find a foreground image panel using OpenCV and Qwen vision selection.",
     )
     parser.add_argument(
         "image", type=Path, help="Screenshot or image to inspect."
@@ -42,16 +42,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional exact local model key; discovered automatically when omitted.",
     )
     parser.add_argument(
-        "--max-iterations",
+        "--max-candidates",
         type=int,
-        default=5,
-        help="Maximum number of model refinement passes (minimum 2).",
+        default=8,
+        help="Maximum number of OpenCV rectangles sent to Qwen (minimum 2).",
     )
     parser.add_argument(
         "--max-image-dimension",
         type=int,
         default=2048,
-        help="Maximum side length of images sent to Qwen (original pixels are preserved for cropping).",
+        help="Maximum side length of images sent to Qwen.",
     )
     parser.add_argument(
         "--output",
@@ -66,8 +66,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not args.image.is_file():
         parser.error(f"input image does not exist: {args.image}")
-    if args.max_iterations < 2:
-        parser.error("--max-iterations must be at least 2.")
+    if args.max_candidates < 2:
+        parser.error("--max-candidates must be at least 2.")
     if args.max_image_dimension < 256:
         parser.error("--max-image-dimension must be at least 256.")
 
@@ -90,23 +90,18 @@ def main(argv: list[str] | None = None) -> int:
             args.image,
             output_dir,
             client,
-            max_iterations=args.max_iterations,
+            max_candidates=args.max_candidates,
         )
     except Exception as error:
         print(f"Experiment failed: {error}", file=sys.stderr)
         return 1
 
-    if result["accepted"]:
-        print(f"Confirmed crop: {result['output_crop']}")
-        return 0
-    if result["status"] == "stable_candidate":
-        print(
-            "Stable but unconfirmed candidate: candidate.png. "
-            "Inspect candidate.png and overlay.png before using the result."
-        )
-        return 2
     print(
-        f"No confirmed crop ({result['status']}). "
-        "Inspect candidate.png and overlay.png before using the result."
+        f"Selected candidate {result['selected_candidate_id']}/"
+        f"{result['candidate_count']}: {result['output_crop']}"
+    )
+    print(
+        "This is an unconfirmed candidate. Inspect overlay.png, candidate.png, "
+        "and proposals.png before using it."
     )
     return 2
