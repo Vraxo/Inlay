@@ -12,6 +12,22 @@ def test_parses_plain_json_response():
     assert reply.reason == "Panel found"
 
 
+def test_parses_pixel_coordinates_relative_to_original_image():
+    reply = parse_reply(
+        '{"done": false, "bbox_pixels_xyxy": [3, 56, 923, 1748], "reason": "Panel found"}',
+        image_size=(1080, 2400),
+    )
+    assert reply.box == (3, 23, 855, 728)
+
+
+def test_recovers_legacy_bbox_1000_field_containing_pixel_coordinates():
+    reply = parse_reply(
+        '{"done": false, "bbox_1000": [3, 56, 923, 1748], "reason": "Panel found"}',
+        image_size=(1080, 2400),
+    )
+    assert reply.box == (3, 23, 855, 728)
+
+
 def test_parses_json_with_surrounding_commentary():
     reply = parse_reply(
         'Result follows:\n{"done": true, "bbox_1000": [10, 20, 900, 950], "reason": "Verified"}\nFinished.'
@@ -34,8 +50,16 @@ def test_rejects_non_boolean_done():
 
 
 def test_rejects_missing_rectangle():
-    with pytest.raises(ValueError, match="bbox_1000"):
+    with pytest.raises(ValueError, match="bbox_pixels_xyxy or bbox_1000"):
         parse_reply('{"done": false, "reason": "No rectangle"}')
+
+
+def test_rejects_pixel_coordinates_outside_original_image():
+    with pytest.raises(ValueError, match="bbox_1000 coordinates must be between 0 and 1000"):
+        parse_reply(
+            '{"done": false, "bbox_1000": [3, 56, 923, 2440]}',
+            image_size=(1080, 2400),
+        )
 
 
 def test_rejects_responses_without_json():
