@@ -13,7 +13,7 @@ from .geometry import Box1000, box_1000_to_pixels
 from .protocol import ModelReply, parse_reply
 
 
-MAX_OUTPUT_TOKENS = 4096
+MAX_OUTPUT_TOKENS = 1024
 
 SYSTEM_PROMPT = """You are Inlay's image-boundary locator.
 
@@ -101,28 +101,10 @@ class LMStudioVisionClient:
             "input": request_input,
             "temperature": 0.1,
             "max_output_tokens": MAX_OUTPUT_TOKENS,
-            "reasoning": "off",
             "store": False,
         }
 
-        try:
-            response = self._post_with_retries(payload)
-        except requests.HTTPError as error:
-            failed_response = error.response
-            details = failed_response.text if failed_response is not None else str(error)
-            if (
-                failed_response is None
-                or failed_response.status_code not in (400, 422)
-                or "reasoning" not in details.casefold()
-            ):
-                raise
-            self.report(
-                "This LM Studio model rejected the reasoning-off setting; "
-                "retrying with its default reasoning mode and a larger output budget."
-            )
-            payload.pop("reasoning")
-            response = self._post_with_retries(payload)
-
+        response = self._post_with_retries(payload)
         try:
             response_data = response.json()
             output = response_data["output"]
@@ -152,11 +134,28 @@ class LMStudioVisionClient:
             return parse_reply(message_text, reasoning_text)
         except ValueError as error:
             stats = response_data.get("stats", {})
+            total_tokens = stats.get("total_output_tokens") if isinstance(stats, dict) else None
+            reasoning_tokens = (
+                stats.get("reasoning_output_tokens") if isinstance(stats, dict) else None
+            )
+            if (
+                not message_text.strip()
+                and isinstance(total_tokens, (int, float))
+                and isinstance(reasoning_tokens, (int, float))
+                and total_tokens > 0
+                and reasoning_tokens >= total_tokens * 0.9
+            ):
+                raise RuntimeError(
+                    "The selected model spent its entire output budget on reasoning and "
+                    "did not return a crop rectangle. Qwen3-VL has separate Thinking and "
+                    "Instruct checkpoints; the Thinking checkpoint is not a switchable "
+                    "reasoning mode. Download the Qwen3-VL-8B Instruct model in LM Studio "
+                    "and rerun Inlay with its default model."
+                ) from error
+
             usage = (
-                f" Output tokens: {stats.get('total_output_tokens', 'unknown')}; "
-                f"reasoning tokens: {stats.get('reasoning_output_tokens', 'unknown')}."
-                if isinstance(stats, dict)
-                else ""
+                f" Output tokens: {total_tokens if total_tokens is not None else 'unknown'}; "
+                f"reasoning tokens: {reasoning_tokens if reasoning_tokens is not None else 'unknown'}."
             )
             raise RuntimeError(
                 "Qwen did not return a valid crop rectangle. "
