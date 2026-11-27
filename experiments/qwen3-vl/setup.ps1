@@ -17,14 +17,14 @@ if (-not (Test-Path $python)) {
     throw "The Qwen 3 VL experiment virtual environment could not be created."
 }
 Write-Host ""
-Write-Host "Installing the lightweight experiment dependencies..."
+Write-Host "Installing the experiment dependencies (including headless OpenCV)..."
 & $python -m pip install --upgrade pip
 if ($LASTEXITCODE -ne 0) { throw "Failed to upgrade pip." }
 & $python -m pip install -r (Join-Path $PSScriptRoot "requirements.txt")
 if ($LASTEXITCODE -ne 0) { throw "Failed to install the experiment dependencies." }
 Write-Host ""
 Write-Host "Checking the Python runtime..."
-& $python -c "import requests; import PIL; from inlay_qwen3vl.client import LMStudioVisionClient; from inlay_qwen3vl.runner import run_experiment; print('Requests:', requests.__version__); print('Pillow:', PIL.__version__); print('Qwen 3 VL experiment imports: OK')"
+& $python -c "import cv2; import numpy; import requests; import PIL; from inlay_qwen3vl.client import LMStudioVisionClient; from inlay_qwen3vl.runner import run_experiment; print('OpenCV:', cv2.__version__); print('NumPy:', numpy.__version__); print('Requests:', requests.__version__); print('Pillow:', PIL.__version__); print('Hybrid vision experiment imports: OK')"
 if ($LASTEXITCODE -ne 0) { throw "The Qwen 3 VL experiment import check failed." }
 Pop-Location
 Write-Host ""
