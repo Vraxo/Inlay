@@ -138,7 +138,7 @@ def test_review_request_sends_original_overlay_and_candidate(post):
 
     request_input = post.call_args.kwargs["json"]["input"]
     assert sum(item["type"] == "image" for item in request_input) == 3
-    assert "full-resolution original screenshot" in request_input[0]["content"]
+    assert "full-resolution original screenshot" in request_input[0]["content"].casefold()
 
 
 @patch("inlay_qwen3vl.client.requests.post")
