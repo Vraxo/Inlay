@@ -19,7 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--model",
         default=os.environ.get("INLAY_QWEN_MODEL", "qwen3vl-8b-thinking"),
-        help="Model ID exposed by LM Studio's /v1/models endpoint.",
+        help="API model identifier to assign when loading the local model.",
     )
     parser.add_argument(
         "--api-url",
@@ -37,7 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--load-model",
         default=os.environ.get("INLAY_LMS_LOAD_MODEL", ""),
-        help="Optional local LM Studio model key to load before inference.",
+        help="Optional exact local model key; discovered automatically when omitted.",
     )
     parser.add_argument(
         "--max-iterations",
