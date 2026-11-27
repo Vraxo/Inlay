@@ -99,6 +99,12 @@ def main(argv: list[str] | None = None) -> int:
     if result["accepted"]:
         print(f"Confirmed crop: {result['output_crop']}")
         return 0
+    if result["status"] == "stable_candidate":
+        print(
+            "Stable but unconfirmed candidate: candidate.png. "
+            "Inspect candidate.png and overlay.png before using the result."
+        )
+        return 2
     print(
         f"No confirmed crop ({result['status']}). "
         "Inspect candidate.png and overlay.png before using the result."

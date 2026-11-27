@@ -12,12 +12,12 @@ It is deliberately separate from Inlay's .NET detector and the SAM 3.1 experimen
 4. Ask for the outer rectangle of the complete foreground image panel as compact JSON containing pixel coordinates relative to the full-resolution original screenshot.
 5. Convert the returned pixel coordinates into normalized coordinates and create a crop from the original, full-resolution image using Pillow.
 6. Send Qwen the original screenshot, a preview with the current rectangle drawn over it, and the extracted crop.
-7. Ask Qwen to verify the crop or adjust its rectangle. Repeat until it confirms an unchanged rectangle, makes no progress, or reaches the iteration limit.
+7. Ask Qwen to verify the crop or adjust its rectangle. Stop when it explicitly confirms an unchanged rectangle, when the model stops making progress, when four recent proposals form a highly overlapping stable cluster, or when the iteration limit is reached.
 8. Save the crop candidate, visual diagnostics, and a JSON report.
 
 Python validates the pixel rectangle against the original image dimensions. The model never reconstructs or redraws the image.
 
-A model's done response is only its own assessment, not proof of correctness. Inspect the overlays and compare the results with labelled ground truth before considering automatic extraction reliable.
+A model's `done` response is only its own assessment, not proof of correctness. A stable candidate is not an accepted crop: it means the last four proposals had pairwise intersection-over-union (IoU) of at least 0.95. In that case, Inlay uses the coordinate-wise median of those four rectangles to reduce small coordinate jitter, but leaves the result as `candidate.png` for visual inspection.
 
 ## Requirements
 
@@ -57,7 +57,7 @@ Useful options:
 
 - `--model <identifier>` — API identifier assigned to the loaded model
 - `--load-model <exact-local-model-key>` — override automatic local-model discovery
-- `--max-iterations 5` — maximum number of model refinement rounds (minimum 2)
+- `--max-iterations 5` — maximum number of model refinement passes (minimum 2)
 - `--output <directory>` — diagnostics output directory (default: <image-name>.qwen3vl)
 - `--api-url http://localhost:1234/api/v1/chat` — LM Studio native chat endpoint
 - `--max-image-dimension 2048` — maximum side length of images sent to Qwen
@@ -68,13 +68,13 @@ You can also configure INLAY_QWEN_MODEL, INLAY_LMSTUDIO_API_URL, INLAY_LMS_EXECU
 
 By default, the experiment creates a directory named <image-name>.qwen3vl beside the input image. It contains:
 
-- `crop.png` when Qwen confirms a stable rectangle
-- `candidate.png` when a rectangle was found but not confirmed
+- `crop.png` when Qwen explicitly confirms an unchanged rectangle on a later review
+- `candidate.png` when a rectangle is found but not explicitly confirmed, including stable consensus candidates
 - `overlay.png` with the final rectangle drawn over the original screenshot
 - `iteration-XX-overlay.png` and `iteration-XX-candidate.png` for each round
-- `report.json` with the model's responses, rectangles, iteration status, and output paths
+- `report.json` with the model's responses, rectangles, iteration status, stability metrics, and output paths
 
-An unconfirmed candidate is intentionally not named crop.png. A result is only marked accepted when Qwen confirms the same rectangle on a subsequent visual review. Even then, that status is not a measured accuracy guarantee.
+An unconfirmed candidate is intentionally not named `crop.png`. Even a model-confirmed result is not a measured accuracy guarantee; compare results with labelled ground truth before considering automatic extraction reliable.
 
 ## Tests
 

@@ -36,9 +36,14 @@ Include the complete image panel, even if its corners are rounded. Do not
 estimate from typical screen layouts or describe your visual reasoning. Use the
 supplied image. Keep the reason to one short sentence.
 
-On the first pass, set done=false. On review passes, set done=true only when the
-current rectangle is correct and you return exactly the same coordinates.
-Otherwise return the best corrected rectangle and set done=false."""
+On the first pass, set done=false. On review passes, inspect each edge against
+the original screenshot. Do not make tiny cosmetic adjustments or shift an edge
+because of uncertainty. Change an edge only when visible evidence shows that it
+is outside the photo panel or cuts into the panel. If the current rectangle
+already includes the complete panel and excludes the surrounding interface,
+return exactly the same coordinates and set done=true. Otherwise return the
+best corrected rectangle and set done=false. Do not equate uncertainty with a
+need to change coordinates."""
 
 
 class LMStudioVisionClient:
@@ -89,8 +94,10 @@ class LMStudioVisionClient:
                 "photo/image panel and excludes surrounding background/interface. Return "
                 "bbox_pixels_xyxy in pixel coordinates relative to the FULL-RESOLUTION original "
                 "screenshot (the dimensions stated above), not the resized preview. "
-                "If the current rectangle is correct, return exactly the same coordinates and "
-                "set done=true. Otherwise return corrected coordinates and set done=false. "
+                "Verify each edge against the original. Do not make tiny cosmetic adjustments. "
+                "If the candidate already includes the full panel, return exactly the same "
+                "coordinates and set done=true. Otherwise return corrected coordinates and "
+                "set done=false. "
                 f"Current bbox_1000: {list(current_box)}."
             )
             images = [preview, overlay, self._resize(crop)]
