@@ -9,16 +9,15 @@ It runs locally in Python with PyTorch. There is no custom C++ runtime, GGUF con
 Requirements:
 
 - 64-bit Python 3.12
-- Git for Windows
 - An NVIDIA GPU and a compatible NVIDIA driver for CUDA acceleration
 
 From this directory in PowerShell, run:
 
     .\setup.ps1
 
-The script creates a local .venv, installs PyTorch with the CUDA 12.8 runtime, installs Meta's official SAM 3 package, and installs the Inlay runner.
+The script creates a local .venv, installs PyTorch with the CUDA 12.8 runtime, and installs Meta's official SAM 3 source archive plus the Inlay runner. The source archive is downloaded over HTTPS from GitHub's archive host; Git itself is not used.
 
-**You do not need to install the CUDA Toolkit, CMake, Visual Studio C++ Build Tools, or any separate native compiler.** PyTorch's CUDA wheel includes the runtime libraries; an NVIDIA driver is still required for GPU inference. If CUDA is unavailable, the runner falls back to CPU, which can be very slow.
+**You do not need to install Git, the CUDA Toolkit, CMake, Visual Studio C++ Build Tools, or any separate native compiler.** PyTorch's CUDA wheel includes the runtime libraries; an NVIDIA driver is still required for GPU inference. If CUDA is unavailable, the runner falls back to CPU, which can be very slow.
 
 ## Model access (one time)
 
