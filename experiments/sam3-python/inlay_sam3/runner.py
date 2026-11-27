@@ -25,8 +25,12 @@ def load_model() -> tuple[Any, Any, str]:
         from sam3.model_builder import build_sam3_image_model, download_ckpt_from_hf
         from sam3.model.sam3_image_processor import Sam3Processor
     except ImportError as error:
+        missing_module = getattr(error, "name", None)
+        detail = f" Missing module: {missing_module}." if missing_module else f" {error}"
         raise RuntimeError(
-            "SAM 3 is not installed. Run setup.ps1 from this experiment directory."
+            "SAM 3 could not be imported."
+            f"{detail} Run setup.ps1 from this experiment directory to install "
+            "the experiment's complete dependency set."
         ) from error
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
