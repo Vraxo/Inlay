@@ -1,17 +1,18 @@
 # Inlay — Qwen 3 VL crop-refinement experiment
 
-This experiment tests whether **Qwen 3 VL through LM Studio**, combined with a small Python crop-and-review loop, can identify the complete foreground photo/image panel in a screenshot.
+This experiment tests whether Qwen 3 VL through LM Studio, combined with a small Python crop-and-review loop, can identify the complete foreground photo/image panel in a screenshot.
 
 It is deliberately separate from Inlay's .NET detector and the SAM 3.1 experiment. It does not install PyTorch, download model weights, or change either existing implementation.
 
 ## How it works
 
-1. Ensure LM Studio's local API server is running and the configured Qwen model is available.
-2. Send the screenshot to Qwen 3 VL and ask for the outer rectangle of the complete foreground image panel.
-3. Convert the returned normalized coordinates into pixel coordinates and create a crop from the original, full-resolution image using Pillow.
-4. Send Qwen the original screenshot, a preview with the current rectangle drawn over it, and the extracted crop.
-5. Ask Qwen to verify the crop or adjust its rectangle. Repeat until it confirms an unchanged rectangle, makes no progress, or reaches the iteration limit.
-6. Save the crop candidate, visual diagnostics, and a JSON report.
+1. Start the LM Studio local API server if it is not already running.
+2. Check whether the configured Qwen model is loaded. If not, inspect downloaded LLMs using lms ls --llm --json, find the matching local model key, and load it with the configured API identifier.
+3. Send the screenshot to Qwen 3 VL and ask for the outer rectangle of the complete foreground image panel.
+4. Convert the returned normalized coordinates into pixel coordinates and create a crop from the original, full-resolution image using Pillow.
+5. Send Qwen the original screenshot, a preview with the current rectangle drawn over it, and the extracted crop.
+6. Ask Qwen to verify the crop or adjust its rectangle. Repeat until it confirms an unchanged rectangle, makes no progress, or reaches the iteration limit.
+7. Save the crop candidate, visual diagnostics, and a JSON report.
 
 The model returns coordinates normalized to the range 0–1000 relative to the original image. Python validates the rectangle and performs the crop using the original pixels. The model never reconstructs or redraws the image.
 
@@ -21,7 +22,7 @@ A model's done response is only its own assessment, not proof of correctness. In
 
 - 64-bit Python 3.12
 - LM Studio installed
-- The Qwen 3 VL model already downloaded in LM Studio
+- The Qwen 3 VL model downloaded in LM Studio
 - The LM Studio lms CLI available on PATH if the script should start the server or load a model automatically
 
 From this directory in PowerShell:
@@ -32,26 +33,28 @@ This creates a separate .venv and installs only Requests, Pillow, and pytest. It
 
 ## Run
 
-With the model already loaded in LM Studio:
+With the model downloaded in LM Studio:
 
     .\.venv\Scripts\python.exe -m inlay_qwen3vl C:\path\to\screenshot.jpg
 
-The default model identifier matches WallpaperNamer:
+The default API identifier matches WallpaperNamer:
 
     qwen3vl-8b-thinking
 
-Override it when the ID shown by LM Studio's /v1/models endpoint is different:
+When that model is not already loaded, Inlay searches downloaded LLM model keys and loads the unique matching model automatically. It assigns the API identifier above so the chat request uses the expected name. The model must already be downloaded; the experiment does not fetch large model weights automatically.
 
-    .\.venv\Scripts\python.exe -m inlay_qwen3vl screenshot.jpg --model qwen3vl-8b-thinking
+If the local model key cannot be matched automatically, list downloaded LLMs with:
 
-To have the script start the server if needed, it uses lms server start. To ask it to load a model as well, pass the local LM Studio model key:
+    lms ls --llm
 
-    .\.venv\Scripts\python.exe -m inlay_qwen3vl screenshot.jpg --load-model <model-key>
+Then supply the exact key shown by LM Studio:
 
-If the model key and API model identifier differ, set --load-model to the local key and --model to the identifier shown by /v1/models.
+    .\.venv\Scripts\python.exe -m inlay_qwen3vl screenshot.jpg --load-model <exact-model-key>
 
 Useful options:
 
+- --model qwen3vl-8b-thinking — API identifier assigned to the loaded model
+- --load-model <exact-model-key> — override automatic local-model discovery
 - --max-iterations 5 — maximum number of model refinement rounds (minimum 2)
 - --output <directory> — diagnostics output directory
 - --api-url http://localhost:1234/v1/chat/completions — LM Studio endpoint
