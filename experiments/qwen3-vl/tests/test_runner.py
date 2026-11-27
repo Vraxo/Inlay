@@ -67,6 +67,58 @@ def test_never_accepts_a_rectangle_on_the_initial_pass(tmp_path: Path):
     assert not (output / "crop.png").exists()
 
 
+def test_returns_median_candidate_when_model_keeps_jittering(tmp_path: Path):
+    source = tmp_path / "source.png"
+    output = tmp_path / "output"
+    Image.new("RGB", (1080, 2400), "white").save(source)
+
+    client = FakeVisionClient([
+        ModelReply(False, (25, 188, 827, 667), "Initial localization", "{}"),
+        ModelReply(False, (31, 191, 828, 665), "Panel still identified", "{}"),
+        ModelReply(False, (4, 190, 833, 665), "Panel still identified", "{}"),
+        ModelReply(False, (25, 188, 828, 666), "Panel still identified", "{}"),
+        ModelReply(False, (31, 190, 833, 665), "Panel still identified", "{}"),
+    ])
+
+    result = run_experiment(
+        source, output, client, max_iterations=5, report=lambda _: None
+    )
+
+    assert result["status"] == "stable_candidate"
+    assert result["accepted"] is False
+    assert result["final_bbox_1000"] == [25, 189, 828, 666]
+    assert result["stability"]["window_size"] == 4
+    assert result["stability"]["minimum_pairwise_iou"] >= 0.95
+    assert len(client.calls) == 4
+    assert (output / "candidate.png").is_file()
+    assert (output / "overlay.png").is_file()
+    assert (output / "report.json").is_file()
+    assert not (output / "crop.png").exists()
+
+
+def test_does_not_call_disagreeing_rectangles_stable(tmp_path: Path):
+    source = tmp_path / "source.png"
+    output = tmp_path / "output"
+    Image.new("RGB", (1000, 1000), "white").save(source)
+
+    client = FakeVisionClient([
+        ModelReply(False, (40, 40, 450, 450), "First area", "{}"),
+        ModelReply(False, (500, 500, 950, 950), "Different area", "{}"),
+        ModelReply(False, (30, 30, 440, 440), "First area", "{}"),
+        ModelReply(False, (520, 520, 970, 970), "Different area", "{}"),
+    ])
+
+    result = run_experiment(
+        source, output, client, max_iterations=4, report=lambda _: None
+    )
+
+    assert result["status"] == "max_iterations"
+    assert result["stability"] is None
+    assert result["accepted"] is False
+    assert (output / "candidate.png").is_file()
+    assert not (output / "crop.png").exists()
+
+
 def test_stops_after_iteration_limit_with_candidate_output(tmp_path: Path):
     source = tmp_path / "source.png"
     output = tmp_path / "output"
@@ -83,4 +135,5 @@ def test_stops_after_iteration_limit_with_candidate_output(tmp_path: Path):
 
     assert result["status"] == "max_iterations"
     assert result["accepted"] is False
+    assert result["stability"] is None
     assert (output / "candidate.png").is_file()
