@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 import subprocess
 import sys
 import time
@@ -32,6 +34,62 @@ def _model_is_available(api_url: str, model_name: str) -> bool:
         return False
 
 
+def _local_model_keys(lms_executable: str) -> list[str]:
+    """Read downloaded LLM model keys from the LM Studio CLI."""
+    result = subprocess.run(
+        [lms_executable, "ls", "--llm", "--json"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip()
+        raise RuntimeError(
+            detail or f"'lms ls --llm --json' exited with code {result.returncode}."
+        )
+
+    models = json.loads(result.stdout)
+    if not isinstance(models, list):
+        raise ValueError("'lms ls --llm --json' did not return a JSON array.")
+
+    return [
+        str(model["modelKey"])
+        for model in models
+        if isinstance(model, dict) and model.get("modelKey")
+    ]
+
+
+def _normalise_model_key(value: str) -> str:
+    model_name = value.split("@", 1)[0].rsplit("/", 1)[-1]
+    return re.sub(r"[^a-z0-9]", "", model_name.casefold())
+
+
+def _match_local_model_key(model_name: str, model_keys: list[str]) -> str | None:
+    """Match an API model ID to one unambiguous downloaded local model key."""
+    target = _normalise_model_key(model_name)
+    if not target:
+        return None
+
+    exact = [
+        key for key in model_keys
+        if _normalise_model_key(key) == target
+    ]
+    if len(exact) == 1:
+        return exact[0]
+    if exact:
+        return None
+
+    compatible = [
+        key for key in model_keys
+        if (
+            _normalise_model_key(key).startswith(target)
+            or target.startswith(_normalise_model_key(key))
+        )
+    ]
+    return compatible[0] if len(compatible) == 1 else None
+
+
 def _spawn(lms_executable: str, arguments: list[str]) -> subprocess.Popen | None:
     creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
     try:
@@ -53,7 +111,7 @@ def ensure_server_ready(
     load_model: str = "",
     report: Callable[[str], None] = print,
 ) -> bool:
-    """Start LM Studio's server if needed and verify the configured model ID."""
+    """Start LM Studio, auto-load a matching downloaded model, and verify its API ID."""
     if not _model_is_available(api_url, model_name):
         report("LM Studio server/model not ready; checking the local server...")
         try:
@@ -87,21 +145,34 @@ def ensure_server_ready(
         report(f"LM Studio model '{model_name}' is available.")
         return True
 
-    if not load_model.strip():
-        report(f"Model '{model_name}' is not currently listed by LM Studio.")
-        report("Load it in LM Studio, or rerun with --load-model <local-model-key>.")
+    if load_model.strip():
+        model_key = load_model.strip()
+    else:
+        report(f"Model '{model_name}' is not loaded; looking for its local download...")
         try:
-            available = _model_ids(api_url)
-        except (requests.RequestException, ValueError, KeyError, TypeError):
-            available = []
-        if available:
-            report("Models currently listed by the server:")
-            for model_id in available:
-                report(f"  - {model_id}")
-        return False
+            model_keys = _local_model_keys(lms_executable)
+        except (OSError, subprocess.SubprocessError, ValueError, TypeError) as error:
+            report(f"Could not list downloaded LM Studio models: {error}")
+            report("Load the model in LM Studio or set --load-model to its exact local model key.")
+            return False
 
-    report(f"Loading '{load_model}' through the LM Studio CLI...")
-    process = _spawn(lms_executable, ["load", load_model, "--yes"])
+        model_key = _match_local_model_key(model_name, model_keys)
+        if model_key is None:
+            report(f"Could not find one unambiguous local model matching '{model_name}'.")
+            if model_keys:
+                report("Downloaded LLM model keys:")
+                for key in model_keys:
+                    report(f"  - {key}")
+            else:
+                report("No downloaded LLM models were found by 'lms ls --llm'.")
+            report("Set --load-model to the exact key shown above, or download the vision model first.")
+            return False
+
+    report(f"Loading local model '{model_key}' as API model '{model_name}'...")
+    process = _spawn(
+        lms_executable,
+        ["load", model_key, "--identifier", model_name, "--yes"],
+    )
     if process is None:
         report(f"Could not run '{lms_executable} load'.")
         return False
@@ -115,5 +186,5 @@ def ensure_server_ready(
             report(f"'lms load' exited with code {process.returncode}.")
             return False
 
-    report("Timed out waiting for the model to load.")
+    report("Timed out waiting for the model to load and appear in /v1/models.")
     return False
