@@ -1,4 +1,3 @@
-from copy import deepcopy
 from unittest.mock import patch
 
 from PIL import Image
@@ -38,7 +37,7 @@ def patch_response():
 
 
 @patch("inlay_qwen3vl.client.requests.post")
-def test_initial_request_uses_native_chat_reasoning_off_and_one_image(post):
+def test_initial_request_uses_native_chat_and_bounded_output(post):
     post.return_value = successful_response()
     client = LMStudioVisionClient("http://localhost:1234/api/v1/chat", "qwen-test")
     reply = client.inspect(Image.new("RGB", (640, 480)), None, 1)
@@ -46,9 +45,8 @@ def test_initial_request_uses_native_chat_reasoning_off_and_one_image(post):
     payload = post.call_args.kwargs["json"]
     request_input = payload["input"]
     assert reply.box == (100, 120, 900, 880)
-    assert payload["reasoning"] == "off"
-    assert payload["max_output_tokens"] == MAX_OUTPUT_TOKENS
-    assert payload["max_output_tokens"] > 1024
+    assert payload["max_output_tokens"] == MAX_OUTPUT_TOKENS == 1024
+    assert "reasoning" not in payload
     assert payload["store"] is False
     assert payload["system_prompt"]
     assert len(request_input) == 2
@@ -58,33 +56,28 @@ def test_initial_request_uses_native_chat_reasoning_off_and_one_image(post):
 
 
 @patch("inlay_qwen3vl.client.requests.post")
-def test_retries_without_reasoning_setting_when_model_rejects_it(post):
-    rejected = patch_response()
-    rejected.ok = False
-    rejected.status_code = 400
-    rejected.reason = "Bad Request"
-    rejected.text = "Reasoning setting 'off' is not supported by this model."
-    payloads = []
+def test_reports_actionable_error_when_thinking_model_uses_all_tokens(post):
+    response = successful_response()
+    response.json.return_value = {
+        "output": [
+            {"type": "reasoning", "content": "The screenshot has a photo in the center..."}
+        ],
+        "stats": {
+            "total_output_tokens": MAX_OUTPUT_TOKENS,
+            "reasoning_output_tokens": MAX_OUTPUT_TOKENS,
+        },
+    }
+    post.return_value = response
 
-    def record_request(url, *, json, **kwargs):
-        payloads.append(deepcopy(json))
-        return rejected if len(payloads) == 1 else successful_response()
-
-    post.side_effect = record_request
-    messages = []
-
-    client = LMStudioVisionClient(
-        "http://localhost:1234/api/v1/chat",
-        "qwen-test",
-        report=messages.append,
-    )
-    reply = client.inspect(Image.new("RGB", (640, 480)), None, 1)
-
-    assert reply.box == (100, 120, 900, 880)
-    assert payloads[0]["reasoning"] == "off"
-    assert "reasoning" not in payloads[1]
-    assert payloads[1]["max_output_tokens"] == MAX_OUTPUT_TOKENS
-    assert any("rejected the reasoning-off setting" in message for message in messages)
+    client = LMStudioVisionClient("http://localhost:1234/api/v1/chat", "qwen-test")
+    try:
+        client.inspect(Image.new("RGB", (640, 480)), None, 1)
+    except RuntimeError as error:
+        message = str(error)
+        assert "separate Thinking and Instruct checkpoints" in message
+        assert "Qwen3-VL-8B Instruct" in message
+    else:
+        raise AssertionError("Expected the Thinking checkpoint to be identified.")
 
 
 @patch("inlay_qwen3vl.client.requests.post")
@@ -131,31 +124,6 @@ def test_reads_a_json_answer_even_when_reasoning_is_also_returned(post):
 
     assert reply.box == (100, 120, 900, 880)
     assert reply.done is False
-
-
-@patch("inlay_qwen3vl.client.requests.post")
-def test_reports_when_native_api_returns_only_incomplete_reasoning(post):
-    response = successful_response()
-    response.json.return_value = {
-        "output": [
-            {"type": "reasoning", "content": "The screenshot shows a centered image panel..."}
-        ],
-        "stats": {
-            "total_output_tokens": MAX_OUTPUT_TOKENS,
-            "reasoning_output_tokens": MAX_OUTPUT_TOKENS,
-        },
-    }
-    post.return_value = response
-
-    client = LMStudioVisionClient("http://localhost:1234/api/v1/chat", "qwen-test")
-    try:
-        client.inspect(Image.new("RGB", (100, 100)), None, 1)
-    except RuntimeError as error:
-        message = str(error)
-        assert "did not return a valid crop rectangle" in message
-        assert f"reasoning tokens: {MAX_OUTPUT_TOKENS}" in message
-    else:
-        raise AssertionError("Expected incomplete reasoning to be rejected.")
 
 
 @patch("inlay_qwen3vl.client.requests.post")
