@@ -1,3 +1,4 @@
+from copy import deepcopy
 from unittest.mock import patch
 
 from PIL import Image
@@ -63,7 +64,13 @@ def test_retries_without_reasoning_setting_when_model_rejects_it(post):
     rejected.status_code = 400
     rejected.reason = "Bad Request"
     rejected.text = "Reasoning setting 'off' is not supported by this model."
-    post.side_effect = [rejected, successful_response()]
+    payloads = []
+
+    def record_request(url, *, json, **kwargs):
+        payloads.append(deepcopy(json))
+        return rejected if len(payloads) == 1 else successful_response()
+
+    post.side_effect = record_request
     messages = []
 
     client = LMStudioVisionClient(
@@ -73,12 +80,10 @@ def test_retries_without_reasoning_setting_when_model_rejects_it(post):
     )
     reply = client.inspect(Image.new("RGB", (640, 480)), None, 1)
 
-    first_payload = post.call_args_list[0].kwargs["json"]
-    second_payload = post.call_args_list[1].kwargs["json"]
     assert reply.box == (100, 120, 900, 880)
-    assert first_payload["reasoning"] == "off"
-    assert "reasoning" not in second_payload
-    assert second_payload["max_output_tokens"] == MAX_OUTPUT_TOKENS
+    assert payloads[0]["reasoning"] == "off"
+    assert "reasoning" not in payloads[1]
+    assert payloads[1]["max_output_tokens"] == MAX_OUTPUT_TOKENS
     assert any("rejected the reasoning-off setting" in message for message in messages)
 
 
