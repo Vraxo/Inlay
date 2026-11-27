@@ -122,8 +122,16 @@ class LMStudioVisionClient:
             "response_format": RESPONSE_FORMAT,
         }
 
-        response = self._post_with_retries(payload)
-        if response.status_code in (400, 422) and self._is_schema_error(response.text):
+        try:
+            response = self._post_with_retries(payload)
+        except requests.HTTPError as error:
+            response = error.response
+            if (
+                response is None
+                or response.status_code not in (400, 422)
+                or not self._is_schema_error(response.text)
+            ):
+                raise
             self.report("LM Studio rejected JSON-schema mode; retrying with ordinary JSON output.")
             payload.pop("response_format", None)
             response = self._post_with_retries(payload)
