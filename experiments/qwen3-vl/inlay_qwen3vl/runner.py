@@ -10,6 +10,8 @@ from .geometry import Box1000, box_1000_to_pixels
 from .protocol import CandidateSelection
 from .vision import (
     RectangleCandidate,
+    draw_boundary_options_overview,
+    draw_boundary_options_overview,
     draw_candidate_overview,
     draw_sharpness_overview,
     generate_candidates,
@@ -61,6 +63,19 @@ def _select_candidate(
             float(best_option["score"]) < 0.08
             or float(best_option["inside_ratio"]) < 0.10
             or (len(options) > 1 and margin < 0.035)
+        ):
+            sharpness_is_confident = False
+
+    if sharpness_is_confident:
+        proposed_box = (
+            candidates[selected_boundary_ids["left"] - 1].box[0],
+            candidates[selected_boundary_ids["top"] - 1].box[1],
+            candidates[selected_boundary_ids["right"] - 1].box[2],
+            candidates[selected_boundary_ids["bottom"] - 1].box[3],
+        )
+        if not (
+            0 <= proposed_box[0] < proposed_box[2] <= 1000
+            and 0 <= proposed_box[1] < proposed_box[3] <= 1000
         ):
             sharpness_is_confident = False
 
@@ -224,6 +239,7 @@ def run_experiment(
         "overlay.png",
         "proposals.png",
         "sharpness.png",
+        "boundary_options.png",
         "report.json",
     ):
         stale = output_dir / name
@@ -245,6 +261,11 @@ def run_experiment(
     sharpness_overview = draw_sharpness_overview(image, candidates)
     sharpness_path = output_dir / "sharpness.png"
     sharpness_overview.save(sharpness_path)
+
+    boundary_rankings = rank_sharpness_boundaries(image, candidates)
+    boundary_overview = draw_boundary_options_overview(image, boundary_rankings)
+    boundary_options_path = output_dir / "boundary_options.png"
+    boundary_overview.save(boundary_options_path)
 
     report(
         f"OpenCV generated {len(candidates)} candidate rectangles. "
@@ -287,7 +308,7 @@ def run_experiment(
         "input": str(image_path.resolve()),
         "image_size": {"width": image.width, "height": image.height},
         "model": getattr(client, "model_name", None),
-        "pipeline": "OpenCV edge/contour proposals -> confidence-gated OpenCV/Qwen boundary selection with sharpness guidance -> OpenCV edge refinement",
+        "pipeline": "OpenCV edge/contour proposals -> sharpness-contrast boundary ranking -> confidence-gated Qwen fallback -> OpenCV edge refinement",
         "selection_method": selection_method,
         "selection_metrics": selection_metrics,
         "status": "selected_candidate",
@@ -305,13 +326,15 @@ def run_experiment(
         "output_overlay": overlay_path.name,
         "output_proposals": proposals_path.name,
         "output_sharpness": sharpness_path.name,
+        "output_boundary_options": boundary_options_path.name,
         "note": (
-            "When geometric confidence is ambiguous, Qwen independently selects the "
-            "left, top, right, and bottom boundaries using the original screenshot, "
-            "numbered proposals, and a sharpness map. Python combines those edges and "
-            "refines them using local Sobel gradients. High-confidence proposals may "
-            "be selected directly by OpenCV. This is an unconfirmed candidate, not an "
-            "accuracy guarantee. Inspect overlay.png, candidate.png, and sharpness.png."
+            "Python compares local detail immediately inside and outside each proposed "
+            "edge. When all four sharp-inside versus blurred-outside transitions have "
+            "clear evidence, it selects those boundaries directly. Otherwise Qwen "
+            "reviews the original screenshot, sharpness map, and isolated edge options. "
+            "Python combines the selected edges and applies local Sobel refinement. "
+            "This is an unconfirmed candidate, not an accuracy guarantee. Inspect "
+            "overlay.png, candidate.png, sharpness.png, and boundary_options.png."
         ),
     }
     (output_dir / "report.json").write_text(
@@ -330,9 +353,14 @@ def run_experiment(
     else:
         selected_description = f"candidate {selected_candidate_id}"
 
+    selector_name = {
+        "sharpness_boundary_confidence": "OpenCV sharpness analysis",
+        "opencv_high_confidence": "OpenCV geometry",
+        "qwen_semantic": "Qwen",
+    }.get(selection_method, selection_method)
+
     report(
-        f"{'OpenCV' if selection_method == 'opencv_high_confidence' else 'Qwen'} "
-        f"selected {selected_description}: "
+        f"{selector_name} selected {selected_description}: "
         f"{selection.reason or 'No explanation returned.'}"
     )
     report(
