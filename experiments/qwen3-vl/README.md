@@ -11,11 +11,12 @@ It is deliberately separate from Inlay's .NET detector and the SAM 3 experiment.
 3. Load the original screenshot with Pillow and correct its EXIF orientation.
 4. OpenCV computes horizontal and vertical Sobel gradients, builds long-edge projection profiles, and finds large closed-contour rectangles.
 5. The detector combines the strongest coherent edge pair with other high-scoring geometric candidates. Candidate scoring considers four-edge support, projection strength, area, and centrality.
-6. Python draws numbered candidate rectangles on a second image and sends the original plus that overview to Qwen through LM Studio's native `/api/v1/chat` endpoint.
-7. Qwen returns only a candidate ID. It does not generate or estimate coordinates.
-8. Python maps the selected candidate back to original pixels, performs local Sobel edge snapping, and creates the crop and overlay.
+6. If the best proposal has strong support on all four sides and a clear score lead, OpenCV selects it directly. The initial conservative gate requires score >= 0.80, weakest-side support >= 0.55, and a margin >= 0.06 over the next proposal.
+7. Otherwise, Python draws numbered candidate rectangles on a second image and sends the original plus that overview to Qwen through LM Studio's native `/api/v1/chat` endpoint.
+8. Qwen returns only a candidate ID. It does not generate or estimate coordinates.
+9. Python maps the selected candidate back to original pixels, performs local Sobel edge snapping, and creates the crop and overlay.
 
-The model's responsibility is semantic selection. Rectangle geometry, validation, refinement, and pixel extraction are performed by Python/OpenCV/Pillow.
+The model is used as a semantic tie-breaker when geometric evidence is ambiguous. It cannot override a high-confidence OpenCV proposal. Rectangle geometry, validation, refinement, and pixel extraction are performed by Python/OpenCV/Pillow. The thresholds are conservative starting values and should be calibrated against labelled screenshots before being treated as general confidence probabilities.
 
 ## Requirements
 
@@ -69,7 +70,7 @@ By default, the experiment creates a directory named `<image-name>.qwen3vl` besi
 - `candidate.png` — selected and edge-refined photo candidate
 - `overlay.png` — selected rectangle drawn over the original screenshot
 - `proposals.png` — all numbered OpenCV candidates shown to Qwen
-- `report.json` — candidate geometry scores, Qwen selection, refinement offsets, and output paths
+- `report.json` — candidate geometry scores, selection method and confidence metrics, refinement offsets, and output paths
 
 The experiment deliberately does not create `crop.png` or mark a result accepted automatically. Inspect `overlay.png` and `candidate.png` before using the result. A good computer-vision score or model selection is not an accuracy guarantee.
 
