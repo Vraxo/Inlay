@@ -5,6 +5,7 @@ from PIL import Image, ImageDraw, ImageFilter
 from inlay_qwen3vl.protocol import CandidateSelection
 from inlay_qwen3vl.runner import (
     _resolve_selected_box,
+    _save_selected_crop,
     _select_candidate,
     run_experiment,
 )
@@ -227,3 +228,38 @@ def test_sharpness_contrast_selects_all_four_boundaries_without_qwen():
     assert metrics["boundary_evidence"]["top"]["coordinate"] == 220
     assert metrics["boundary_evidence"]["right"]["coordinate"] == 540
     assert metrics["boundary_evidence"]["bottom"]["coordinate"] == 820
+
+
+
+def test_saved_crop_uses_transparent_rounded_corners(tmp_path: Path):
+    from inlay_qwen3vl.geometry import pixels_to_box_1000
+
+    image = Image.new("RGB", (100, 100), (100, 140, 180))
+    box = pixels_to_box_1000((10, 10, 90, 90), *image.size)
+
+    crop_path, _ = _save_selected_crop(
+        image,
+        box,
+        tmp_path,
+        corner_radius=18,
+    )
+
+    with Image.open(crop_path) as crop:
+        assert crop.mode == "RGBA"
+        assert crop.getpixel((0, 0))[3] == 0
+        assert crop.getpixel((40, 40))[3] == 255
+        assert crop.getpixel((0, 40))[3] == 255
+
+
+def test_saved_square_crop_keeps_all_corner_pixels_opaque(tmp_path: Path):
+    from inlay_qwen3vl.geometry import pixels_to_box_1000
+
+    image = Image.new("RGB", (100, 100), (100, 140, 180))
+    box = pixels_to_box_1000((10, 10, 90, 90), *image.size)
+
+    crop_path, _ = _save_selected_crop(image, box, tmp_path)
+
+    with Image.open(crop_path) as crop:
+        assert crop.mode == "RGBA"
+        assert crop.getpixel((0, 0))[3] == 255
+        assert crop.getpixel((40, 40))[3] == 255

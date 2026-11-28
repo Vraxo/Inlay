@@ -13,6 +13,7 @@ from .vision import (
     draw_boundary_options_overview,
     draw_candidate_overview,
     draw_sharpness_overview,
+    detect_corner_radius,
     generate_candidates,
     rank_sharpness_boundaries,
     refine_rectangle,
@@ -194,24 +195,52 @@ def _save_selected_crop(
     image: Image.Image,
     box: Box1000,
     output_dir: Path,
+    *,
+    corner_radius: int = 0,
 ) -> tuple[Path, Path]:
     pixels = box_1000_to_pixels(box, image.width, image.height)
     left, top, right, bottom = pixels
+    crop_width = right - left
+    crop_height = bottom - top
+    radius = min(corner_radius, crop_width // 2, crop_height // 2)
+
+    crop = image.crop(pixels).convert("RGBA")
+    if radius > 0:
+        scale = 4
+        mask = Image.new(
+            "L",
+            (crop_width * scale, crop_height * scale),
+            0,
+        )
+        ImageDraw.Draw(mask).rounded_rectangle(
+            (0, 0, crop_width * scale - 1, crop_height * scale - 1),
+            radius=radius * scale,
+            fill=255,
+        )
+        crop.putalpha(
+            mask.resize(
+                (crop_width, crop_height),
+                Image.Resampling.LANCZOS,
+            )
+        )
     crop_path = output_dir / "candidate.png"
-    image.crop(pixels).save(crop_path)
+    crop.save(crop_path)
 
     overlay = image.copy()
     draw = ImageDraw.Draw(overlay)
     line_width = max(4, round(max(image.size) / 500))
     for offset in range(line_width):
-        draw.rectangle(
-            (
-                left + offset,
-                top + offset,
-                right - 1 - offset,
-                bottom - 1 - offset,
-            ),
+        bounds = (
+            left + offset,
+            top + offset,
+            right - 1 - offset,
+            bottom - 1 - offset,
+        )
+        draw.rounded_rectangle(
+            bounds,
+            radius=max(0, radius - offset),
             outline=(255, 0, 255),
+            width=1,
         )
     overlay_path = output_dir / "overlay.png"
     overlay.save(overlay_path)
@@ -279,7 +308,13 @@ def run_experiment(
         boundary_candidate_ids,
     ) = _resolve_selected_box(selection, candidates)
     refined_box, refinement = refine_rectangle(image, selected_box)
-    crop_path, overlay_path = _save_selected_crop(image, refined_box, output_dir)
+    corner_radius, corner_metrics = detect_corner_radius(image, refined_box)
+    crop_path, overlay_path = _save_selected_crop(
+        image,
+        refined_box,
+        output_dir,
+        corner_radius=corner_radius,
+    )
     selected_pixels = box_1000_to_pixels(
         refined_box,
         image.width,
@@ -319,6 +354,11 @@ def run_experiment(
         "selected_proposal_bbox_1000": list(selected_box),
         "final_bbox_1000": list(refined_box),
         "final_bbox_pixels_xyxy": list(selected_pixels),
+        "corner_shape": {
+            "type": "rounded_rectangle" if corner_radius > 0 else "rectangle",
+            "radius_pixels": corner_radius,
+            **corner_metrics,
+        },
         "refinement": refinement,
         "candidates": proposal_data,
         "output_crop": crop_path.name,

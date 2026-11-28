@@ -17,7 +17,7 @@ It is deliberately separate from Inlay's .NET detector and the SAM 3 experiment.
 9. Qwen selects the left, top, right, and bottom boundaries independently, using the matching panel in the atlas. Each response field references a candidate ID whose corresponding edge coordinate should be used. The four IDs may differ, allowing Python to combine boundaries from different proposals. Qwen does not generate or estimate coordinates.
 10. If sharpness evidence is inconclusive, the existing conservative four-edge OpenCV rectangle gate remains available before Qwen. Python validates the combined rectangle, maps it back to original pixels, performs local Sobel edge snapping, and creates the crop and overlay.
 
-Qwen is now a fallback for ambiguous visual cases rather than the first line of defense. Rectangle geometry, sharpness scoring, boundary composition, validation, refinement, diagnostic images, and pixel extraction are performed by Python/OpenCV/Pillow. These thresholds are initial heuristics, not trained confidence probabilities; they should be calibrated against labelled screenshots before being treated as general guarantees.
+Qwen is now a fallback for ambiguous visual cases rather than the first line of defense. After selecting the rectangular bounds, Python checks the four corners for the sharp-to-blurry transition along a rounded-rectangle arc. If the evidence supports a rounded panel, the extracted PNG receives an antialiased alpha mask so the blurred backdrop outside the rounded corners becomes transparent. Square panels keep fully opaque square corners. The detected radius and evidence score are recorded in the report. Rectangle geometry, sharpness scoring, boundary composition, corner-shape detection, validation, refinement, diagnostic images, and pixel extraction are performed by Python/OpenCV/Pillow. These thresholds are initial heuristics, not trained confidence probabilities; they should be calibrated against labelled screenshots before being treated as general guarantees.
 
 ## Requirements
 
@@ -68,12 +68,12 @@ You can also configure INLAY_QWEN_MODEL, INLAY_LMSTUDIO_API_URL, INLAY_LMS_EXECU
 
 By default, the experiment creates a directory named `<image-name>.qwen3vl` beside the input image. It contains:
 
-- `candidate.png` — selected and edge-refined photo candidate
+- `candidate.png` — selected and edge-refined photo candidate as RGBA; rounded-corner backdrop pixels are transparent
 - `overlay.png` — selected rectangle drawn over the original screenshot
 - `proposals.png` — all numbered OpenCV candidates shown to Qwen
 - `sharpness.png` — local detail-energy map; brighter areas are sharper and darker areas are blurrier
 - `boundary_options.png` — four-panel view of the alternative left, right, top, and bottom edge positions
-- `report.json` — candidate geometry scores, boundary contrast evidence, independently selected boundary IDs, selection method, refinement offsets, and output paths
+- `report.json` — candidate geometry scores, boundary contrast evidence, independently selected boundary IDs, selection method, corner shape/radius, refinement offsets, and output paths
 
 The experiment deliberately does not create `crop.png` or mark a result accepted automatically. Inspect `overlay.png` and `candidate.png` before using the result. A good computer-vision score or model selection is not an accuracy guarantee.
 

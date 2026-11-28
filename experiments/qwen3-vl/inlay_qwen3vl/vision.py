@@ -786,6 +786,155 @@ def draw_boundary_options_overview(
     return canvas
 
 
+def detect_corner_radius(
+    image: Image.Image,
+    box: Box1000,
+    *,
+    max_dimension: int = 1600,
+) -> tuple[int, dict[str, object]]:
+    analysis = _analyse(image, max_dimension)
+    gray = analysis.gray
+    detail = cv2.GaussianBlur(
+        np.abs(cv2.Laplacian(gray, cv2.CV_32F, ksize=3)),
+        (0, 0),
+        sigmaX=1.5,
+        sigmaY=1.5,
+    )
+    left, top, right, bottom = box_1000_to_pixels(
+        box,
+        image.width,
+        image.height,
+    )
+    left, top, right, bottom = (
+        round(value * analysis.scale)
+        for value in (left, top, right, bottom)
+    )
+    width = right - left
+    height = bottom - top
+    short_side = min(width, height)
+    if short_side < 48:
+        return 0, {"score": 0.0, "reason": "panel_too_small"}
+
+    inner = detail[
+        top + round(height * 0.12):bottom - round(height * 0.12),
+        left + round(width * 0.12):right - round(width * 0.12),
+    ]
+    reference = max(float(np.percentile(inner, 90)), 1.0)
+    if reference <= 1.0:
+        return 0, {"score": 0.0, "reason": "insufficient_interior_detail"}
+
+    maximum_radius = round(short_side * 0.12)
+    if maximum_radius < 8:
+        return 0, {"score": 0.0, "reason": "corner_radius_below_resolution"}
+
+    patch_radius = max(2, round(short_side * 0.004))
+    angles = np.deg2rad((30, 40, 50, 60))
+    corners = (
+        (left, top, 1, 1),
+        (right - 1, top, -1, 1),
+        (right - 1, bottom - 1, -1, -1),
+        (left, bottom - 1, 1, -1),
+    )
+
+    def patch_mean(x: float, y: float) -> float | None:
+        center_x = round(x)
+        center_y = round(y)
+        x1 = center_x - patch_radius
+        y1 = center_y - patch_radius
+        x2 = center_x + patch_radius + 1
+        y2 = center_y + patch_radius + 1
+        if (
+            x1 < 0
+            or y1 < 0
+            or x2 > analysis.width
+            or y2 > analysis.height
+        ):
+            return None
+        return float(np.mean(detail[y1:y2, x1:x2]))
+
+    corner_radii = []
+    corner_strengths = []
+    for corner_x, corner_y, inward_x, inward_y in corners:
+        estimates = []
+        strengths = []
+        for angle in angles:
+            cosine = float(np.cos(angle))
+            sine = float(np.sin(angle))
+            factor = cosine + sine - np.sqrt((cosine + sine) ** 2 - 1.0)
+            max_distance = round(maximum_radius * factor) + 12
+            profile = []
+
+            for distance in range(max_distance + 1):
+                value = patch_mean(
+                    corner_x + inward_x * distance * cosine,
+                    corner_y + inward_y * distance * sine,
+                )
+                profile.append(0.0 if value is None else value)
+
+            smoothed = cv2.GaussianBlur(
+                np.asarray(profile, dtype=np.float32).reshape(-1, 1),
+                (0, 0),
+                sigmaX=0,
+                sigmaY=1.0,
+            ).ravel()
+            initial_detail = float(smoothed[0])
+            threshold = max(
+                reference * 0.5,
+                initial_detail + (reference - initial_detail) * 0.5,
+            )
+            if initial_detail >= threshold:
+                continue
+
+            crossings = np.flatnonzero(smoothed >= threshold)
+            if crossings.size == 0:
+                continue
+
+            crossing = int(crossings[0])
+            radius = (crossing + 4.5) / factor
+            if radius > maximum_radius * 1.5:
+                continue
+
+            strength = max(
+                0.0,
+                (float(smoothed[crossing]) - initial_detail) / reference,
+            )
+            estimates.append(radius)
+            strengths.append(min(strength, 2.0))
+
+        if estimates:
+            corner_radii.append(float(np.median(estimates)))
+            corner_strengths.append(float(np.median(strengths)))
+        else:
+            corner_radii.append(0.0)
+            corner_strengths.append(0.0)
+
+    detected_corners = [radius for radius in corner_radii if radius >= 8]
+    if len(detected_corners) < 3:
+        return 0, {
+            "score": round(float(np.mean(corner_strengths)), 4),
+            "reason": "no_consistent_rounded_corner_transition",
+            "corner_radius_estimates": [
+                round(value / analysis.scale) for value in corner_radii
+            ],
+        }
+
+    radius = round(float(np.median(detected_corners)) / analysis.scale)
+    if radius < 8:
+        return 0, {
+            "score": round(float(np.mean(corner_strengths)), 4),
+            "reason": "corner_radius_below_resolution",
+        }
+
+    return radius, {
+        "score": round(float(np.mean(corner_strengths)), 4),
+        "corner_radius_estimates": [
+            round(value / analysis.scale) for value in corner_radii
+        ],
+        "detected_corners": len(detected_corners),
+        "maximum_search_radius_pixels": round(maximum_radius / analysis.scale),
+    }
+
+
 def _coordinate_support(
     gradient: np.ndarray,
     coordinate: int,
