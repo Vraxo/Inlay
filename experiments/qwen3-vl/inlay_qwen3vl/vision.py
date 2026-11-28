@@ -432,6 +432,79 @@ def draw_candidate_overview(
     return overview
 
 
+def draw_sharpness_overview(
+    image: Image.Image,
+    candidates: list[RectangleCandidate],
+) -> Image.Image:
+    gray = cv2.cvtColor(np.asarray(image.convert("RGB")), cv2.COLOR_RGB2GRAY)
+    laplacian = cv2.Laplacian(gray, cv2.CV_32F, ksize=3)
+    local_detail = cv2.GaussianBlur(
+        np.abs(laplacian),
+        (0, 0),
+        sigmaX=7,
+        sigmaY=7,
+    )
+    reference = max(float(np.percentile(local_detail, 98)), 1.0)
+    normalized = np.clip(local_detail / reference, 0.0, 1.0)
+    heatmap = cv2.applyColorMap(
+        (normalized * 255).astype(np.uint8),
+        cv2.COLORMAP_INFERNO,
+    )
+    overview = Image.fromarray(cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB))
+    draw = ImageDraw.Draw(overview)
+    line_width = max(2, round(max(image.size) / 700))
+
+    for index, candidate in enumerate(candidates):
+        left, top, right, bottom = box_1000_to_pixels(
+            candidate.box,
+            overview.width,
+            overview.height,
+        )
+        color = COLORS[index % len(COLORS)]
+        draw.rectangle(
+            (left, top, right - 1, bottom - 1),
+            outline=color,
+            width=line_width,
+        )
+
+        label = str(index + 1)
+        padding = max(4, line_width)
+        label_width = max(24, int(draw.textlength(label)) + padding * 2)
+        label_height = max(22, line_width * 5)
+        label_left = min(max(0, left), max(0, overview.width - label_width))
+        label_top = min(max(0, top), max(0, overview.height - label_height))
+        draw.rounded_rectangle(
+            (
+                label_left,
+                label_top,
+                label_left + label_width,
+                label_top + label_height,
+            ),
+            radius=max(3, line_width),
+            fill=color,
+        )
+        draw.text(
+            (label_left + padding, label_top + max(1, padding // 2)),
+            label,
+            fill=(15, 18, 22),
+        )
+
+    footer_height = max(34, round(max(image.size) / 60))
+    canvas = Image.new(
+        "RGB",
+        (overview.width, overview.height + footer_height),
+        (20, 20, 20),
+    )
+    canvas.paste(overview, (0, 0))
+    footer = ImageDraw.Draw(canvas)
+    footer.text(
+        (10, overview.height + max(8, footer_height // 4)),
+        "SHARPNESS MAP  |  Brighter = sharper detail, darker = blurrier",
+        fill=(245, 245, 245),
+    )
+    return canvas
+
+
 def _coordinate_support(
     gradient: np.ndarray,
     coordinate: int,

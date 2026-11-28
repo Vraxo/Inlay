@@ -1,7 +1,11 @@
 from PIL import Image, ImageDraw, ImageFilter
 
 from inlay_qwen3vl.geometry import box_1000_to_pixels
-from inlay_qwen3vl.vision import generate_candidates, refine_rectangle
+from inlay_qwen3vl.vision import (
+    draw_sharpness_overview,
+    generate_candidates,
+    refine_rectangle,
+)
 
 
 def make_screenshot():
@@ -88,3 +92,17 @@ def test_refinement_stays_near_the_selected_rectangle():
         for before, after in zip(original_pixels, refined_pixels, strict=True)
     )
     assert details["method"] == "local Sobel edge snapping"
+
+
+
+def test_sharpness_overview_marks_candidate_boundaries():
+    image = make_screenshot()
+    candidates = generate_candidates(image)
+    overview = draw_sharpness_overview(image, candidates)
+
+    assert overview.mode == "RGB"
+    assert overview.width == image.width
+    assert overview.height > image.height
+    sharp_photo_detail = sum(overview.getpixel((300, 500)))
+    blurred_surround_detail = sum(overview.getpixel((300, 100)))
+    assert sharp_photo_detail > blurred_surround_detail

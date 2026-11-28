@@ -31,7 +31,9 @@ def sample_candidates():
 @patch("inlay_qwen3vl.client.requests.post")
 def test_sends_original_and_numbered_opencv_candidates(post):
     post.return_value = patch_response(
-        '{"candidate_id": 2, "reason": "The second box encloses the complete panel."}'
+        '{"left_candidate_id": 1, "top_candidate_id": 2, '
+        '"right_candidate_id": 1, "bottom_candidate_id": 2, '
+        '"reason": "These edges enclose the sharp foreground panel."}'
     )
     image = Image.new("RGB", (640, 960), "white")
     candidates = sample_candidates()
@@ -41,28 +43,35 @@ def test_sends_original_and_numbered_opencv_candidates(post):
 
     payload = post.call_args.kwargs["json"]
     request_input = payload["input"]
-    assert selection.candidate_id == 2
-    assert payload["max_output_tokens"] == MAX_OUTPUT_TOKENS == 512
+    assert selection.candidate_id is None
+    assert selection.uses_independent_boundaries
+    assert selection.left_candidate_id == 1
+    assert selection.top_candidate_id == 2
+    assert selection.right_candidate_id == 1
+    assert selection.bottom_candidate_id == 2
+    assert payload["max_output_tokens"] == MAX_OUTPUT_TOKENS == 384
     assert payload["store"] is False
-    assert "return coordinates" in payload["system_prompt"]
-    assert len(request_input) == 3
+    assert "sharpness map" in payload["system_prompt"]
+    assert "independently" in payload["system_prompt"]
+    assert len(request_input) == 4
     assert request_input[0]["type"] == "text"
-    assert request_input[1]["type"] == "image"
-    assert request_input[2]["type"] == "image"
+    assert all(item["type"] == "image" for item in request_input[1:])
     assert payload["model"] == "qwen-test"
 
 
 @patch("inlay_qwen3vl.client.requests.post")
 def test_rejects_unknown_candidate_id(post):
     post.return_value = patch_response(
-        '{"candidate_id": 9, "reason": "Not on the overlay."}'
+        '{"left_candidate_id": 9, "top_candidate_id": 2, '
+        '"right_candidate_id": 1, "bottom_candidate_id": 2, '
+        '"reason": "Not on the overlay."}'
     )
     client = LMStudioVisionClient("http://localhost:1234/api/v1/chat", "qwen-test")
 
     try:
         client.select_candidate(Image.new("RGB", (100, 100)), sample_candidates())
     except RuntimeError as error:
-        assert "did not select a valid numbered candidate" in str(error)
+        assert "did not return four valid boundary candidate IDs" in str(error)
     else:
         raise AssertionError("Expected an invalid candidate selection to fail.")
 

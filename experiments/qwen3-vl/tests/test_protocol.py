@@ -48,3 +48,38 @@ def test_rejects_missing_candidate_selection():
 def test_rejects_empty_candidate_list():
     with pytest.raises(ValueError, match="At least one candidate"):
         parse_candidate_selection('{"candidate_id": 1}', 0)
+
+
+
+def test_parses_independent_boundary_selections():
+    result = parse_candidate_selection(
+        '{"left_candidate_id": 1, "top_candidate_id": 2, '
+        '"right_candidate_id": 3, "bottom_candidate_id": 4, '
+        '"reason": "Each edge follows the sharp-to-blurred transition."}',
+        4,
+    )
+
+    assert result.candidate_id is None
+    assert result.uses_independent_boundaries
+    assert result.left_candidate_id == 1
+    assert result.top_candidate_id == 2
+    assert result.right_candidate_id == 3
+    assert result.bottom_candidate_id == 4
+
+
+def test_rejects_incomplete_independent_boundary_selection():
+    with pytest.raises(ValueError, match="missing: bottom_candidate_id"):
+        parse_candidate_selection(
+            '{"left_candidate_id": 1, "top_candidate_id": 2, '
+            '"right_candidate_id": 3}',
+            4,
+        )
+
+
+def test_rejects_out_of_range_boundary_candidate_id():
+    with pytest.raises(ValueError, match="'top_candidate_id' must be between 1 and 4"):
+        parse_candidate_selection(
+            '{"left_candidate_id": 1, "top_candidate_id": 5, '
+            '"right_candidate_id": 3, "bottom_candidate_id": 4}',
+            4,
+        )

@@ -11,6 +11,7 @@ from .protocol import CandidateSelection
 from .vision import (
     RectangleCandidate,
     draw_candidate_overview,
+    draw_sharpness_overview,
     generate_candidates,
     refine_rectangle,
 )
@@ -44,8 +45,8 @@ def _select_candidate(
     second_score = ranked[1][1].score if len(ranked) > 1 else 0.0
     score_margin = best.score - second_score
 
-    # A proposal with a strong edge on every side and a clear score lead is
-    # more trustworthy than a semantic model's coordinate-free guess.
+    # A proposal with strong support on every side and a clear score lead is
+    # more trustworthy than asking the model to judge ambiguous boundaries.
     # These are conservative starting thresholds, not a trained confidence.
     if (
         len(ranked) >= 2
@@ -75,6 +76,57 @@ def _select_candidate(
         "weakest_edge_support_of_best": best.weakest_edge_support,
         "margin_over_second": round(score_margin, 4),
     }
+
+
+def _resolve_selected_box(
+    selection: CandidateSelection,
+    candidates: list[RectangleCandidate],
+) -> tuple[Box1000, int | None, dict[str, int] | None]:
+    if selection.uses_independent_boundaries:
+        boundary_ids = {
+            "left": selection.left_candidate_id,
+            "top": selection.top_candidate_id,
+            "right": selection.right_candidate_id,
+            "bottom": selection.bottom_candidate_id,
+        }
+        if any(
+            candidate_id is None or not 1 <= candidate_id <= len(candidates)
+            for candidate_id in boundary_ids.values()
+        ):
+            raise ValueError("A selected boundary references an unknown candidate.")
+
+        box = (
+            candidates[selection.left_candidate_id - 1].box[0],
+            candidates[selection.top_candidate_id - 1].box[1],
+            candidates[selection.right_candidate_id - 1].box[2],
+            candidates[selection.bottom_candidate_id - 1].box[3],
+        )
+        left, top, right, bottom = box
+        if not (0 <= left < right <= 1000 and 0 <= top < bottom <= 1000):
+            raise ValueError(
+                "The independently selected boundaries do not form a valid rectangle."
+            )
+
+        matching_id = next(
+            (
+                index
+                for index, candidate in enumerate(candidates, start=1)
+                if candidate.box == box
+            ),
+            None,
+        )
+        return box, matching_id, {
+            key: int(candidate_id)
+            for key, candidate_id in boundary_ids.items()
+        }
+
+    if (
+        selection.candidate_id is None
+        or not 1 <= selection.candidate_id <= len(candidates)
+    ):
+        raise ValueError("The selected candidate ID is outside the proposal list.")
+
+    return candidates[selection.candidate_id - 1].box, selection.candidate_id, None
 
 
 def _save_selected_crop(
@@ -119,7 +171,14 @@ def run_experiment(
         raise ValueError("At least two computer-vision candidates are required.")
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    for name in ("crop.png", "candidate.png", "overlay.png", "proposals.png", "report.json"):
+    for name in (
+        "crop.png",
+        "candidate.png",
+        "overlay.png",
+        "proposals.png",
+        "sharpness.png",
+        "report.json",
+    ):
         stale = output_dir / name
         if stale.exists():
             stale.unlink()
@@ -136,6 +195,10 @@ def run_experiment(
     proposals_path = output_dir / "proposals.png"
     overview.save(proposals_path)
 
+    sharpness_overview = draw_sharpness_overview(image, candidates)
+    sharpness_path = output_dir / "sharpness.png"
+    sharpness_overview.save(sharpness_path)
+
     report(
         f"OpenCV generated {len(candidates)} candidate rectangles. "
         f"Top geometric score: {max(item.score for item in candidates):.3f}."
@@ -143,11 +206,12 @@ def run_experiment(
     selection, selection_method, selection_metrics = _select_candidate(
         image, candidates, client
     )
-    if not 1 <= selection.candidate_id <= len(candidates):
-        raise ValueError("The model selected a candidate ID outside the proposal list.")
-
-    selected = candidates[selection.candidate_id - 1]
-    refined_box, refinement = refine_rectangle(image, selected.box)
+    (
+        selected_box,
+        selected_candidate_id,
+        boundary_candidate_ids,
+    ) = _resolve_selected_box(selection, candidates)
+    refined_box, refinement = refine_rectangle(image, selected_box)
     crop_path, overlay_path = _save_selected_crop(image, refined_box, output_dir)
     selected_pixels = box_1000_to_pixels(
         refined_box,
@@ -176,15 +240,16 @@ def run_experiment(
         "input": str(image_path.resolve()),
         "image_size": {"width": image.width, "height": image.height},
         "model": getattr(client, "model_name", None),
-        "pipeline": "OpenCV edge/contour proposals -> confidence-gated OpenCV/Qwen selection -> OpenCV edge refinement",
+        "pipeline": "OpenCV edge/contour proposals -> confidence-gated OpenCV/Qwen boundary selection with sharpness guidance -> OpenCV edge refinement",
         "selection_method": selection_method,
         "selection_metrics": selection_metrics,
         "status": "selected_candidate",
         "accepted": False,
         "candidate_count": len(candidates),
-        "selected_candidate_id": selection.candidate_id,
+        "selected_candidate_id": selected_candidate_id,
+        "selected_boundary_candidate_ids": boundary_candidate_ids,
         "selection_reason": selection.reason,
-        "selected_proposal_bbox_1000": list(selected.box),
+        "selected_proposal_bbox_1000": list(selected_box),
         "final_bbox_1000": list(refined_box),
         "final_bbox_pixels_xyxy": list(selected_pixels),
         "refinement": refinement,
@@ -192,10 +257,14 @@ def run_experiment(
         "output_crop": crop_path.name,
         "output_overlay": overlay_path.name,
         "output_proposals": proposals_path.name,
+        "output_sharpness": sharpness_path.name,
         "note": (
-            "Qwen selected one OpenCV-generated rectangle; Python refined its edges "
-            "using local Sobel gradients. This is an unconfirmed candidate, not an "
-            "accuracy guarantee. Inspect overlay.png and candidate.png before use."
+            "When geometric confidence is ambiguous, Qwen independently selects the "
+            "left, top, right, and bottom boundaries using the original screenshot, "
+            "numbered proposals, and a sharpness map. Python combines those edges and "
+            "refines them using local Sobel gradients. High-confidence proposals may "
+            "be selected directly by OpenCV. This is an unconfirmed candidate, not an "
+            "accuracy guarantee. Inspect overlay.png, candidate.png, and sharpness.png."
         ),
     }
     (output_dir / "report.json").write_text(
@@ -203,9 +272,20 @@ def run_experiment(
         encoding="utf-8",
     )
 
+    if boundary_candidate_ids:
+        selected_description = (
+            "boundaries "
+            f"(L{boundary_candidate_ids['left']}, "
+            f"T{boundary_candidate_ids['top']}, "
+            f"R{boundary_candidate_ids['right']}, "
+            f"B{boundary_candidate_ids['bottom']})"
+        )
+    else:
+        selected_description = f"candidate {selected_candidate_id}"
+
     report(
         f"{'OpenCV' if selection_method == 'opencv_high_confidence' else 'Qwen'} "
-        f"selected candidate {selection.candidate_id}: "
+        f"selected {selected_description}: "
         f"{selection.reason or 'No explanation returned.'}"
     )
     report(

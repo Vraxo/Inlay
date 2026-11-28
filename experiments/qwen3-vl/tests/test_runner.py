@@ -3,7 +3,11 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter
 
 from inlay_qwen3vl.protocol import CandidateSelection
-from inlay_qwen3vl.runner import _select_candidate, run_experiment
+from inlay_qwen3vl.runner import (
+    _resolve_selected_box,
+    _select_candidate,
+    run_experiment,
+)
 from inlay_qwen3vl.vision import RectangleCandidate
 
 
@@ -57,6 +61,7 @@ def test_runs_opencv_proposals_qwen_selection_and_edge_refinement(tmp_path: Path
     assert (output / "candidate.png").is_file()
     assert (output / "overlay.png").is_file()
     assert (output / "proposals.png").is_file()
+    assert (output / "sharpness.png").is_file()
     assert (output / "report.json").is_file()
     assert not (output / "crop.png").exists()
 
@@ -99,3 +104,55 @@ def test_ambiguous_opencv_rectangles_are_sent_to_qwen():
     assert selection.candidate_id == 2
     assert method == "qwen_semantic"
     assert metrics["method"] == "qwen_semantic"
+
+
+
+def test_independent_boundaries_can_form_a_new_rectangle():
+    candidates = [
+        RectangleCandidate((31, 29, 969, 987), 0.70, 0.50, 0.20, 0.80, "test"),
+        RectangleCandidate((31, 289, 969, 711), 0.68, 0.50, 0.30, 0.80, "test"),
+        RectangleCandidate((83, 29, 914, 987), 0.67, 0.50, 0.20, 0.80, "test"),
+    ]
+    selection = CandidateSelection(
+        None,
+        "Selected each edge independently.",
+        "{}",
+        left_candidate_id=1,
+        top_candidate_id=2,
+        right_candidate_id=1,
+        bottom_candidate_id=2,
+    )
+
+    selected_box, matching_id, boundary_ids = _resolve_selected_box(
+        selection,
+        candidates,
+    )
+
+    assert selected_box == (31, 289, 969, 711)
+    assert matching_id == 2
+    assert boundary_ids == {"left": 1, "top": 2, "right": 1, "bottom": 2}
+
+
+def test_independent_boundaries_can_create_a_rectangle_not_in_candidates():
+    candidates = [
+        RectangleCandidate((31, 29, 969, 987), 0.70, 0.50, 0.20, 0.80, "test"),
+        RectangleCandidate((83, 289, 914, 711), 0.68, 0.50, 0.30, 0.80, "test"),
+    ]
+    selection = CandidateSelection(
+        None,
+        "The best edges come from different proposals.",
+        "{}",
+        left_candidate_id=1,
+        top_candidate_id=2,
+        right_candidate_id=1,
+        bottom_candidate_id=2,
+    )
+
+    selected_box, matching_id, boundary_ids = _resolve_selected_box(
+        selection,
+        candidates,
+    )
+
+    assert selected_box == (31, 289, 969, 711)
+    assert matching_id is None
+    assert boundary_ids == {"left": 1, "top": 2, "right": 1, "bottom": 2}
