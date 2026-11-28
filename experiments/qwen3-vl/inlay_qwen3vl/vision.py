@@ -743,14 +743,14 @@ def draw_boundary_options_overview(
                     fill=color,
                     width=max(2, round(tile_width / 270)),
                 )
-                label_x = x_offset + 8 + option_index * 105
+                label_x = 8 + option_index * 105
                 label_y = min(
                     y_offset + header_height + line_y + 4,
                     y_offset + header_height + tile_height - 22,
                 )
 
-            label_width = 105
-            label_height = 22
+            label_width = 120
+            label_height = 24
             draw.rounded_rectangle(
                 (
                     label_x,
