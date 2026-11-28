@@ -56,12 +56,17 @@ def test_runs_opencv_proposals_qwen_selection_and_edge_refinement(tmp_path: Path
     assert result["pipeline"].startswith("OpenCV edge/contour proposals")
     assert result["candidate_count"] >= 2
     assert result["selected_candidate_id"] == 1
-    assert result["selection_method"] in {"opencv_high_confidence", "qwen_semantic"}
+    assert result["selection_method"] in {
+        "opencv_high_confidence",
+        "qwen_semantic",
+        "sharpness_boundary_confidence",
+    }
     assert result["refinement"]["method"] == "local Sobel edge snapping"
     assert (output / "candidate.png").is_file()
     assert (output / "overlay.png").is_file()
     assert (output / "proposals.png").is_file()
     assert (output / "sharpness.png").is_file()
+    assert (output / "boundary_options.png").is_file()
     assert (output / "report.json").is_file()
     assert not (output / "crop.png").exists()
 
