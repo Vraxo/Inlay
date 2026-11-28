@@ -2,6 +2,8 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from inlay_qwen3vl.geometry import box_1000_to_pixels, pixels_to_box_1000
 from inlay_qwen3vl.vision import (
+    RectangleCandidate,
+    detect_corner_radius,
     draw_boundary_options_overview,
     draw_sharpness_overview,
     generate_candidates,
@@ -11,7 +13,7 @@ from inlay_qwen3vl.vision import (
 )
 
 
-def make_screenshot():
+def make_screenshot(corner_radius=40):
     width, height = 600, 1000
     image = Image.new("RGB", (width, height), (20, 24, 28))
     draw = ImageDraw.Draw(image)
@@ -31,11 +33,17 @@ def make_screenshot():
             )
 
     mask = Image.new("L", panel.size, 0)
-    ImageDraw.Draw(mask).rounded_rectangle(
-        (0, 0, panel.width - 1, panel.height - 1),
-        radius=40,
-        fill=255,
-    )
+    if corner_radius > 0:
+        ImageDraw.Draw(mask).rounded_rectangle(
+            (0, 0, panel.width - 1, panel.height - 1),
+            radius=corner_radius,
+            fill=255,
+        )
+    else:
+        ImageDraw.Draw(mask).rectangle(
+            (0, 0, panel.width - 1, panel.height - 1),
+            fill=255,
+        )
     image.paste(panel.filter(ImageFilter.GaussianBlur(0.5)), (60, 220), mask)
     return image
 
@@ -155,3 +163,25 @@ def test_boundary_options_overview_separates_the_four_edge_directions():
     assert overview.mode == "RGB"
     assert overview.width >= image.width
     assert overview.height > image.height
+
+
+
+def test_detects_rounded_photo_panel_corner_radius():
+    image = make_screenshot(corner_radius=40)
+    box = pixels_to_box_1000((60, 220, 540, 820), *image.size)
+
+    radius, details = detect_corner_radius(image, box)
+
+    assert 32 <= radius <= 48
+    assert details["score"] >= 0.08
+    assert len(details["corner_scores"]) == 4
+
+
+def test_keeps_square_photo_panel_corners():
+    image = make_screenshot(corner_radius=0)
+    box = pixels_to_box_1000((60, 220, 540, 820), *image.size)
+
+    radius, details = detect_corner_radius(image, box)
+
+    assert radius == 0
+    assert details["reason"] == "no_reliable_rounded_corner_transition"
