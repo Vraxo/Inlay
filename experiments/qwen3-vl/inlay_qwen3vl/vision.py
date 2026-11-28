@@ -791,7 +791,7 @@ def detect_corner_radius(
     box: Box1000,
     *,
     max_dimension: int = 1600,
-) -> tuple[int, dict[str, float | int]]:
+) -> tuple[int, dict[str, object]]:
     analysis = _analyse(image, max_dimension)
     detail = _detail_energy(analysis.gray)
     left, top, right, bottom = box_1000_to_pixels(
