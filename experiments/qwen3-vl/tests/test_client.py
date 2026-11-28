@@ -71,7 +71,7 @@ def test_rejects_unknown_candidate_id(post):
     try:
         client.select_candidate(Image.new("RGB", (100, 100)), sample_candidates())
     except RuntimeError as error:
-        assert "did not select a valid numbered candidate" in str(error)
+        assert "did not return four valid boundary candidate IDs" in str(error)
     else:
         raise AssertionError("Expected an invalid candidate selection to fail.")
 
