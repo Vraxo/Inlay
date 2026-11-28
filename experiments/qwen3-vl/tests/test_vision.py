@@ -3,6 +3,7 @@ from PIL import Image, ImageDraw, ImageFilter
 from inlay_qwen3vl.geometry import box_1000_to_pixels, pixels_to_box_1000
 from inlay_qwen3vl.vision import (
     RectangleCandidate,
+    _conservative_corner_radius,
     detect_corner_radius,
     draw_boundary_options_overview,
     draw_sharpness_overview,
@@ -163,6 +164,10 @@ def test_boundary_options_overview_separates_the_four_edge_directions():
     assert overview.width >= image.width
     assert overview.height > image.height
 
+
+
+def test_corner_radius_uses_conservative_estimate_when_measurements_disagree():
+    assert _conservative_corner_radius([85.0, 140.0, 162.0, 101.0]) == 97.0
 
 
 def test_detects_rounded_photo_panel_corner_radius():

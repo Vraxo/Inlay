@@ -105,6 +105,11 @@ def _normalize_profile(profile: np.ndarray) -> np.ndarray:
     return np.clip(profile / reference, 0.0, 1.5) / 1.5
 
 
+def _conservative_corner_radius(radii: list[float]) -> float:
+    """Prefer a smaller mask when corner measurements disagree."""
+    return float(np.percentile(radii, 25))
+
+
 def _find_peaks(profile: np.ndarray, count: int, minimum_distance: int) -> list[int]:
     smooth = cv2.GaussianBlur(
         profile.astype(np.float32).reshape(-1, 1),
@@ -918,7 +923,8 @@ def detect_corner_radius(
             ],
         }
 
-    radius = round(float(np.median(detected_corners)) / analysis.scale)
+    median_radius = float(np.median(detected_corners))
+    radius = round(_conservative_corner_radius(detected_corners) / analysis.scale)
     if radius < 8:
         return 0, {
             "score": round(float(np.mean(corner_strengths)), 4),
@@ -930,6 +936,8 @@ def detect_corner_radius(
         "corner_radius_estimates": [
             round(value / analysis.scale) for value in corner_radii
         ],
+        "corner_radius_median_pixels": round(median_radius / analysis.scale),
+        "radius_selection_percentile": 25,
         "detected_corners": len(detected_corners),
         "maximum_search_radius_pixels": round(maximum_radius / analysis.scale),
     }
