@@ -30,6 +30,52 @@ def _load_image(path: Path) -> Image.Image:
         return oriented.convert("RGB")
 
 
+def _select_candidate(
+    image: Image.Image,
+    candidates: list[RectangleCandidate],
+    client: VisionClient,
+) -> tuple[CandidateSelection, str, dict[str, float | str]]:
+    ranked = sorted(
+        enumerate(candidates, start=1),
+        key=lambda item: item[1].score,
+        reverse=True,
+    )
+    best_id, best = ranked[0]
+    second_score = ranked[1][1].score if len(ranked) > 1 else 0.0
+    score_margin = best.score - second_score
+
+    # A proposal with a strong edge on every side and a clear score lead is
+    # more trustworthy than a semantic model's coordinate-free guess.
+    # These are conservative starting thresholds, not a trained confidence.
+    if (
+        best.score >= 0.80
+        and best.weakest_edge_support >= 0.55
+        and score_margin >= 0.06
+    ):
+        selection = CandidateSelection(
+            best_id,
+            (
+                "Selected automatically: strong support on all four edges "
+                "and a clear lead over the next geometric candidate."
+            ),
+            "{}",
+        )
+        return selection, "opencv_high_confidence", {
+            "method": "opencv_high_confidence",
+            "best_score": best.score,
+            "weakest_edge_support": best.weakest_edge_support,
+            "margin_over_second": round(score_margin, 4),
+        }
+
+    selection = client.select_candidate(image, candidates)
+    return selection, "qwen_semantic", {
+        "method": "qwen_semantic",
+        "best_geometric_score": best.score,
+        "weakest_edge_support_of_best": best.weakest_edge_support,
+        "margin_over_second": round(score_margin, 4),
+    }
+
+
 def _save_selected_crop(
     image: Image.Image,
     box: Box1000,
@@ -91,9 +137,11 @@ def run_experiment(
 
     report(
         f"OpenCV generated {len(candidates)} candidate rectangles. "
-        f"Top geometric score: {candidates[0].score:.3f}."
+        f"Top geometric score: {max(item.score for item in candidates):.3f}."
     )
-    selection = client.select_candidate(image, candidates)
+    selection, selection_method, selection_metrics = _select_candidate(
+        image, candidates, client
+    )
     if not 1 <= selection.candidate_id <= len(candidates):
         raise ValueError("The model selected a candidate ID outside the proposal list.")
 
@@ -127,7 +175,9 @@ def run_experiment(
         "input": str(image_path.resolve()),
         "image_size": {"width": image.width, "height": image.height},
         "model": getattr(client, "model_name", None),
-        "pipeline": "OpenCV edge/contour proposals -> Qwen semantic selection -> OpenCV edge refinement",
+        "pipeline": "OpenCV edge/contour proposals -> confidence-gated OpenCV/Qwen selection -> OpenCV edge refinement",
+        "selection_method": selection_method,
+        "selection_metrics": selection_metrics,
         "status": "selected_candidate",
         "accepted": False,
         "candidate_count": len(candidates),
@@ -153,7 +203,8 @@ def run_experiment(
     )
 
     report(
-        f"Qwen selected candidate {selection.candidate_id}: "
+        f"{'OpenCV' if selection_method == 'opencv_high_confidence' else 'Qwen'} "
+        f"selected candidate {selection.candidate_id}: "
         f"{selection.reason or 'No explanation returned.'}"
     )
     report(
