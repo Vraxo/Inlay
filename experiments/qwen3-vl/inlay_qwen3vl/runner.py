@@ -11,7 +11,6 @@ from .protocol import CandidateSelection
 from .vision import (
     RectangleCandidate,
     draw_boundary_options_overview,
-    draw_boundary_options_overview,
     draw_candidate_overview,
     draw_sharpness_overview,
     generate_candidates,
