@@ -173,7 +173,8 @@ def test_detects_rounded_photo_panel_corner_radius():
 
     assert 32 <= radius <= 48
     assert details["score"] >= 0.08
-    assert len(details["corner_scores"]) == 4
+    assert details["detected_corners"] == 4
+    assert len(details["corner_radius_estimates"]) == 4
 
 
 def test_keeps_square_photo_panel_corners():
@@ -183,4 +184,4 @@ def test_keeps_square_photo_panel_corners():
     radius, details = detect_corner_radius(image, box)
 
     assert radius == 0
-    assert details["reason"] == "no_reliable_rounded_corner_transition"
+    assert details["reason"] == "no_consistent_rounded_corner_transition"
