@@ -786,6 +786,129 @@ def draw_boundary_options_overview(
     return canvas
 
 
+def detect_corner_radius(
+    image: Image.Image,
+    box: Box1000,
+    *,
+    max_dimension: int = 1600,
+) -> tuple[int, dict[str, float | int]]:
+    analysis = _analyse(image, max_dimension)
+    detail = _detail_energy(analysis.gray)
+    left, top, right, bottom = box_1000_to_pixels(
+        box,
+        image.width,
+        image.height,
+    )
+    left, top, right, bottom = (
+        round(value * analysis.scale)
+        for value in (left, top, right, bottom)
+    )
+    width = right - left
+    height = bottom - top
+    short_side = min(width, height)
+    if short_side < 48:
+        return 0, {"score": 0.0, "reason": "panel_too_small"}
+
+    inner = detail[
+        top + round(height * 0.12):bottom - round(height * 0.12),
+        left + round(width * 0.12):right - round(width * 0.12),
+    ]
+    reference = max(float(np.percentile(inner, 90)), 1.0)
+    if reference <= 1.0:
+        return 0, {"score": 0.0, "reason": "insufficient_interior_detail"}
+
+    offset = max(4, round(short_side * 0.006))
+    patch_radius = max(2, round(short_side * 0.004))
+    minimum_radius = offset * 4
+    maximum_radius = round(short_side * 0.12)
+    if maximum_radius < minimum_radius:
+        return 0, {"score": 0.0, "reason": "corner_radius_below_resolution"}
+
+    angles = np.deg2rad((35, 40, 45, 50, 55))
+    corners = (
+        (left, top, 1, 1),
+        (right, top, -1, 1),
+        (right, bottom, -1, -1),
+        (left, bottom, 1, -1),
+    )
+
+    def patch_mean(x: float, y: float) -> float | None:
+        center_x = round(x)
+        center_y = round(y)
+        x1 = center_x - patch_radius
+        y1 = center_y - patch_radius
+        x2 = center_x + patch_radius + 1
+        y2 = center_y + patch_radius + 1
+        if (
+            x1 < 0
+            or y1 < 0
+            or x2 > analysis.width
+            or y2 > analysis.height
+        ):
+            return None
+        return float(np.mean(detail[y1:y2, x1:x2]))
+
+    best_radius = 0
+    best_score = 0.0
+    best_corner_scores: list[float] = []
+
+    for radius in range(minimum_radius, maximum_radius + 1, 2):
+        corner_scores = []
+        for corner_x, corner_y, inward_x, inward_y in corners:
+            center_x = corner_x + inward_x * radius
+            center_y = corner_y + inward_y * radius
+            sample_scores = []
+
+            for angle in angles:
+                cosine = float(np.cos(angle))
+                sine = float(np.sin(angle))
+                boundary_x = center_x - inward_x * radius * cosine
+                boundary_y = center_y - inward_y * radius * sine
+                normal_x = inward_x * cosine
+                normal_y = inward_y * sine
+
+                inside_mean = patch_mean(
+                    boundary_x + normal_x * offset,
+                    boundary_y + normal_y * offset,
+                )
+                outside_mean = patch_mean(
+                    boundary_x - normal_x * offset,
+                    boundary_y - normal_y * offset,
+                )
+                if inside_mean is None or outside_mean is None:
+                    continue
+
+                contrast = (
+                    (inside_mean - outside_mean)
+                    / (inside_mean + outside_mean + 1e-6)
+                )
+                detail_ratio = min(inside_mean / reference, 1.0)
+                sample_scores.append(max(0.0, contrast) * detail_ratio)
+
+            if len(sample_scores) >= 3:
+                corner_scores.append(float(np.median(sample_scores)))
+            else:
+                corner_scores.append(0.0)
+
+        score = float(np.mean(corner_scores))
+        if score > best_score:
+            best_radius = radius
+            best_score = score
+            best_corner_scores = corner_scores
+
+    if best_score < 0.08:
+        return 0, {
+            "score": round(best_score, 4),
+            "reason": "no_reliable_rounded_corner_transition",
+        }
+
+    return round(best_radius / analysis.scale), {
+        "score": round(best_score, 4),
+        "corner_scores": [round(value, 4) for value in best_corner_scores],
+        "maximum_search_radius_pixels": round(maximum_radius / analysis.scale),
+    }
+
+
 def _coordinate_support(
     gradient: np.ndarray,
     coordinate: int,
