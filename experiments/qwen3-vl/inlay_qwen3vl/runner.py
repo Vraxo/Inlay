@@ -45,8 +45,8 @@ def _select_candidate(
     second_score = ranked[1][1].score if len(ranked) > 1 else 0.0
     score_margin = best.score - second_score
 
-    # A proposal with a strong edge on every side and a clear score lead is
-    # more trustworthy than a semantic model's coordinate-free guess.
+    # A proposal with strong support on every side and a clear score lead is
+    # more trustworthy than asking the model to judge ambiguous boundaries.
     # These are conservative starting thresholds, not a trained confidence.
     if (
         len(ranked) >= 2
@@ -171,7 +171,14 @@ def run_experiment(
         raise ValueError("At least two computer-vision candidates are required.")
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    for name in ("crop.png", "candidate.png", "overlay.png", "proposals.png", "sharpness.png", "report.json"):
+    for name in (
+        "crop.png",
+        "candidate.png",
+        "overlay.png",
+        "proposals.png",
+        "sharpness.png",
+        "report.json",
+    ):
         stale = output_dir / name
         if stale.exists():
             stale.unlink()
@@ -199,10 +206,11 @@ def run_experiment(
     selection, selection_method, selection_metrics = _select_candidate(
         image, candidates, client
     )
-    selected_box, selected_candidate_id, boundary_candidate_ids = _resolve_selected_box(
-        selection,
-        candidates,
-    )
+    (
+        selected_box,
+        selected_candidate_id,
+        boundary_candidate_ids,
+    ) = _resolve_selected_box(selection, candidates)
     refined_box, refinement = refine_rectangle(image, selected_box)
     crop_path, overlay_path = _save_selected_crop(image, refined_box, output_dir)
     selected_pixels = box_1000_to_pixels(
@@ -251,11 +259,12 @@ def run_experiment(
         "output_proposals": proposals_path.name,
         "output_sharpness": sharpness_path.name,
         "note": (
-            "Qwen independently selected the left, top, right, and bottom boundaries "
-            "using the original screenshot, numbered proposals, and a sharpness map. "
-            "Python combined those edges and refined them using local Sobel gradients. "
-            "This is an unconfirmed candidate, not an accuracy guarantee. Inspect "
-            "overlay.png, candidate.png, and sharpness.png before use."
+            "When geometric confidence is ambiguous, Qwen independently selects the "
+            "left, top, right, and bottom boundaries using the original screenshot, "
+            "numbered proposals, and a sharpness map. Python combines those edges and "
+            "refines them using local Sobel gradients. High-confidence proposals may "
+            "be selected directly by OpenCV. This is an unconfirmed candidate, not an "
+            "accuracy guarantee. Inspect overlay.png, candidate.png, and sharpness.png."
         ),
     }
     (output_dir / "report.json").write_text(
