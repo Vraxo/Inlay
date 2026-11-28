@@ -48,7 +48,8 @@ def _select_candidate(
     # more trustworthy than a semantic model's coordinate-free guess.
     # These are conservative starting thresholds, not a trained confidence.
     if (
-        best.score >= 0.80
+        len(ranked) >= 2
+        and best.score >= 0.80
         and best.weakest_edge_support >= 0.55
         and score_margin >= 0.06
     ):
