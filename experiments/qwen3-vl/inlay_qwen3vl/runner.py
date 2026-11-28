@@ -13,6 +13,7 @@ from .vision import (
     draw_candidate_overview,
     draw_sharpness_overview,
     generate_candidates,
+    rank_sharpness_boundaries,
     refine_rectangle,
 )
 
@@ -35,7 +36,52 @@ def _select_candidate(
     image: Image.Image,
     candidates: list[RectangleCandidate],
     client: VisionClient,
-) -> tuple[CandidateSelection, str, dict[str, float | str]]:
+) -> tuple[CandidateSelection, str, dict[str, Any]]:
+    boundary_rankings = rank_sharpness_boundaries(image, candidates)
+    sharpness_metrics: dict[str, dict[str, float | int]] = {}
+    selected_boundary_ids: dict[str, int] = {}
+    sharpness_is_confident = True
+
+    for side, options in boundary_rankings.items():
+        best_option = options[0]
+        second_score = float(options[1]["score"]) if len(options) > 1 else 0.0
+        margin = float(best_option["score"]) - second_score
+        sharpness_metrics[side] = {
+            "candidate_id": int(best_option["candidate_id"]),
+            "coordinate": int(best_option["coordinate"]),
+            "score": float(best_option["score"]),
+            "contrast": float(best_option["contrast"]),
+            "inside_detail": float(best_option["inside_detail"]),
+            "outside_detail": float(best_option["outside_detail"]),
+            "inside_ratio": float(best_option["inside_ratio"]),
+            "margin_over_second": round(margin, 4),
+        }
+        selected_boundary_ids[side] = int(best_option["candidate_id"])
+        if (
+            float(best_option["score"]) < 0.08
+            or float(best_option["inside_ratio"]) < 0.10
+            or (len(options) > 1 and margin < 0.035)
+        ):
+            sharpness_is_confident = False
+
+    if sharpness_is_confident:
+        selection = CandidateSelection(
+            None,
+            (
+                "Selected independently: each boundary has strong sharp-inside "
+                "versus blurred-outside detail contrast."
+            ),
+            "{}",
+            left_candidate_id=selected_boundary_ids["left"],
+            top_candidate_id=selected_boundary_ids["top"],
+            right_candidate_id=selected_boundary_ids["right"],
+            bottom_candidate_id=selected_boundary_ids["bottom"],
+        )
+        return selection, "sharpness_boundary_confidence", {
+            "method": "sharpness_boundary_confidence",
+            "boundary_evidence": sharpness_metrics,
+        }
+
     ranked = sorted(
         enumerate(candidates, start=1),
         key=lambda item: item[1].score,
@@ -75,6 +121,7 @@ def _select_candidate(
         "best_geometric_score": best.score,
         "weakest_edge_support_of_best": best.weakest_edge_support,
         "margin_over_second": round(score_margin, 4),
+        "sharpness_boundary_evidence": sharpness_metrics,
     }
 
 
