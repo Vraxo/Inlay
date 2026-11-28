@@ -407,7 +407,7 @@ def rank_sharpness_boundaries(
 
     analysis = _analyse(image, max_dimension)
     detail = _detail_energy(analysis.gray)
-    reference = max(float(np.percentile(detail, 98)), 1.0)
+    reference = max(float(np.percentile(detail, 95)), 1.0)
 
     scaled_boxes = []
     for candidate_id, candidate in enumerate(candidates, start=1):
@@ -493,6 +493,18 @@ def rank_sharpness_boundaries(
                 coordinate + gap:coordinate + gap + band,
                 common_x[0]:common_x[1],
             ]
+
+        expected_length = (
+            common_y[1] - common_y[0]
+            if side in {"left", "right"}
+            else common_x[1] - common_x[0]
+        )
+        expected_area = expected_length * band
+        if (
+            inside.size < expected_area * 0.75
+            or outside.size < expected_area * 0.75
+        ):
+            return 0.0, 0.0, 0.0, 0.0
 
         inside_mean = mean_detail(inside)
         outside_mean = mean_detail(outside)
