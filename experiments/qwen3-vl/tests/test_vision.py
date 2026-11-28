@@ -103,3 +103,6 @@ def test_sharpness_overview_marks_candidate_boundaries():
     assert overview.mode == "RGB"
     assert overview.width == image.width
     assert overview.height > image.height
+    sharp_photo_detail = sum(overview.getpixel((300, 500)))
+    blurred_surround_detail = sum(overview.getpixel((300, 100)))
+    assert sharp_photo_detail > blurred_surround_detail
