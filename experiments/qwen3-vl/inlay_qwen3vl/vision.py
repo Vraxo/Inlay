@@ -48,6 +48,16 @@ COLORS = (
 )
 
 
+def _detail_energy(gray: np.ndarray) -> np.ndarray:
+    laplacian = cv2.Laplacian(gray, cv2.CV_32F, ksize=3)
+    return cv2.GaussianBlur(
+        np.abs(laplacian),
+        (0, 0),
+        sigmaX=7,
+        sigmaY=7,
+    )
+
+
 def _analyse(image: Image.Image, max_dimension: int = 1600) -> _Analysis:
     if max_dimension < 256:
         raise ValueError("max_dimension must be at least 256.")
@@ -386,6 +396,170 @@ def generate_candidates(
     return []
 
 
+def rank_sharpness_boundaries(
+    image: Image.Image,
+    candidates: list[RectangleCandidate],
+    *,
+    max_dimension: int = 1600,
+) -> dict[str, list[dict[str, int | float]]]:
+    if not candidates:
+        raise ValueError("At least one candidate is required.")
+
+    analysis = _analyse(image, max_dimension)
+    detail = _detail_energy(analysis.gray)
+    reference = max(float(np.percentile(detail, 95)), 1.0)
+
+    scaled_boxes = []
+    for candidate_id, candidate in enumerate(candidates, start=1):
+        pixels = box_1000_to_pixels(candidate.box, image.width, image.height)
+        scaled_boxes.append(
+            (
+                candidate_id,
+                tuple(round(value * analysis.scale) for value in pixels),
+                candidate.score,
+            )
+        )
+
+    def shared_span(
+        start_index: int,
+        end_index: int,
+        length: int,
+    ) -> tuple[int, int]:
+        start = max(box[1][start_index] for box in scaled_boxes)
+        end = min(box[1][end_index] for box in scaled_boxes)
+        if end - start >= length * 0.12:
+            return start, end
+
+        centers = [
+            (box[1][start_index] + box[1][end_index]) / 2
+            for box in scaled_boxes
+        ]
+        sizes = [
+            box[1][end_index] - box[1][start_index]
+            for box in scaled_boxes
+        ]
+        center = float(np.median(centers))
+        span = min(float(np.median(sizes)) * 0.55, length * 0.65)
+        return (
+            max(0, round(center - span / 2)),
+            min(length, round(center + span / 2)),
+        )
+
+    common_x = shared_span(0, 2, analysis.width)
+    common_y = shared_span(1, 3, analysis.height)
+    gap = max(2, round(min(analysis.width, analysis.height) * 0.003))
+    band = max(6, round(min(analysis.width, analysis.height) * 0.02))
+
+    def mean_detail(strip: np.ndarray) -> float:
+        return float(np.mean(strip)) if strip.size else 0.0
+
+    def edge_evidence(
+        side: str,
+        coordinate: int,
+    ) -> tuple[float, float, float, float]:
+        if side == "left":
+            inside = detail[
+                common_y[0]:common_y[1],
+                coordinate + gap:coordinate + gap + band,
+            ]
+            outside = detail[
+                common_y[0]:common_y[1],
+                max(0, coordinate - gap - band):max(0, coordinate - gap),
+            ]
+        elif side == "right":
+            inside = detail[
+                common_y[0]:common_y[1],
+                max(0, coordinate - gap - band):max(0, coordinate - gap),
+            ]
+            outside = detail[
+                common_y[0]:common_y[1],
+                coordinate + gap:coordinate + gap + band,
+            ]
+        elif side == "top":
+            inside = detail[
+                coordinate + gap:coordinate + gap + band,
+                common_x[0]:common_x[1],
+            ]
+            outside = detail[
+                max(0, coordinate - gap - band):max(0, coordinate - gap),
+                common_x[0]:common_x[1],
+            ]
+        else:
+            inside = detail[
+                max(0, coordinate - gap - band):max(0, coordinate - gap),
+                common_x[0]:common_x[1],
+            ]
+            outside = detail[
+                coordinate + gap:coordinate + gap + band,
+                common_x[0]:common_x[1],
+            ]
+
+        expected_length = (
+            common_y[1] - common_y[0]
+            if side in {"left", "right"}
+            else common_x[1] - common_x[0]
+        )
+        expected_area = expected_length * band
+        if (
+            inside.size < expected_area * 0.75
+            or outside.size < expected_area * 0.75
+        ):
+            return 0.0, 0.0, 0.0, 0.0
+
+        inside_mean = mean_detail(inside)
+        outside_mean = mean_detail(outside)
+        contrast = (
+            (inside_mean - outside_mean)
+            / (inside_mean + outside_mean + 1e-6)
+        )
+        inside_ratio = inside_mean / reference
+        score = max(0.0, contrast) * min(inside_ratio, 1.0)
+        return score, contrast, inside_mean, outside_mean
+
+    side_indexes = {
+        "left": 0,
+        "top": 1,
+        "right": 2,
+        "bottom": 3,
+    }
+    rankings: dict[str, list[dict[str, int | float]]] = {}
+
+    for side, coordinate_index in side_indexes.items():
+        by_coordinate: dict[int, tuple[int, float]] = {}
+        for candidate_id, box, geometry_score in scaled_boxes:
+            coordinate = round(box[coordinate_index] / analysis.scale)
+            current = by_coordinate.get(coordinate)
+            if current is None or geometry_score > current[1]:
+                by_coordinate[coordinate] = (candidate_id, geometry_score)
+
+        options = []
+        for coordinate, (candidate_id, _) in by_coordinate.items():
+            scaled_coordinate = round(coordinate * analysis.scale)
+            score, contrast, inside_mean, outside_mean = edge_evidence(
+                side,
+                scaled_coordinate,
+            )
+            options.append(
+                {
+                    "candidate_id": candidate_id,
+                    "coordinate": coordinate,
+                    "score": round(score, 4),
+                    "contrast": round(contrast, 4),
+                    "inside_detail": round(inside_mean, 3),
+                    "outside_detail": round(outside_mean, 3),
+                    "inside_ratio": round(inside_mean / reference, 4),
+                }
+            )
+
+        rankings[side] = sorted(
+            options,
+            key=lambda option: float(option["score"]),
+            reverse=True,
+        )
+
+    return rankings
+
+
 def draw_candidate_overview(
     image: Image.Image,
     candidates: list[RectangleCandidate],
@@ -437,13 +611,7 @@ def draw_sharpness_overview(
     candidates: list[RectangleCandidate],
 ) -> Image.Image:
     gray = cv2.cvtColor(np.asarray(image.convert("RGB")), cv2.COLOR_RGB2GRAY)
-    laplacian = cv2.Laplacian(gray, cv2.CV_32F, ksize=3)
-    local_detail = cv2.GaussianBlur(
-        np.abs(laplacian),
-        (0, 0),
-        sigmaX=7,
-        sigmaY=7,
-    )
+    local_detail = _detail_energy(gray)
     reference = max(float(np.percentile(local_detail, 98)), 1.0)
     normalized = np.clip(local_detail / reference, 0.0, 1.0)
     heatmap = cv2.applyColorMap(
@@ -502,6 +670,119 @@ def draw_sharpness_overview(
         "SHARPNESS MAP  |  Brighter = sharper detail, darker = blurrier",
         fill=(245, 245, 245),
     )
+    return canvas
+
+
+def draw_boundary_options_overview(
+    image: Image.Image,
+    rankings: dict[str, list[dict[str, int | float]]],
+) -> Image.Image:
+    tile_width = max(320, image.width // 2)
+    tile_height = max(240, round(image.height * tile_width / image.width))
+    header_height = max(42, round(tile_width * 0.09))
+    canvas = Image.new(
+        "RGB",
+        (tile_width * 2, (tile_height + header_height) * 2),
+        (18, 20, 24),
+    )
+    font = None
+    try:
+        from PIL import ImageFont
+        font = ImageFont.load_default(size=max(14, round(tile_width * 0.035)))
+    except (AttributeError, TypeError):
+        pass
+
+    panels = (
+        ("left", "LEFT EDGE OPTIONS", 0, 0),
+        ("right", "RIGHT EDGE OPTIONS", 1, 0),
+        ("top", "TOP EDGE OPTIONS", 0, 1),
+        ("bottom", "BOTTOM EDGE OPTIONS", 1, 1),
+    )
+    for side, title, column, row in panels:
+        x_offset = column * tile_width
+        y_offset = row * (tile_height + header_height)
+        draw = ImageDraw.Draw(canvas)
+        draw.rectangle(
+            (x_offset, y_offset, x_offset + tile_width, y_offset + header_height),
+            fill=(28, 32, 40),
+        )
+        draw.text(
+            (x_offset + 10, y_offset + 10),
+            title,
+            fill=(245, 245, 245),
+            font=font,
+        )
+
+        view = image.convert("RGB").resize(
+            (tile_width, tile_height),
+            Image.Resampling.LANCZOS,
+        )
+        canvas.paste(view, (x_offset, y_offset + header_height))
+        draw = ImageDraw.Draw(canvas)
+        options = rankings[side]
+        for option_index, option in enumerate(options):
+            coordinate = int(option["coordinate"])
+            candidate_id = int(option["candidate_id"])
+            color = COLORS[option_index % len(COLORS)]
+            label = f"ID {candidate_id}  {coordinate}px"
+
+            if side in {"left", "right"}:
+                line_x = round(coordinate * tile_width / image.width)
+                draw.line(
+                    (
+                        x_offset + line_x,
+                        y_offset + header_height,
+                        x_offset + line_x,
+                        y_offset + header_height + tile_height,
+                    ),
+                    fill=color,
+                    width=max(2, round(tile_width / 270)),
+                )
+                label_x = min(
+                    max(0, line_x + 5),
+                    max(0, tile_width - 124),
+                )
+                label_y = y_offset + header_height + 8 + option_index * 26
+            else:
+                line_y = round(coordinate * tile_height / image.height)
+                draw.line(
+                    (
+                        x_offset,
+                        y_offset + header_height + line_y,
+                        x_offset + tile_width,
+                        y_offset + header_height + line_y,
+                    ),
+                    fill=color,
+                    width=max(2, round(tile_width / 270)),
+                )
+                label_x = min(
+                    8 + option_index * 105,
+                    max(0, tile_width - 124),
+                )
+                label_y = min(
+                    y_offset + header_height + line_y + 4,
+                    y_offset + header_height + tile_height - 22,
+                )
+
+            label_width = 120
+            label_height = 24
+            draw.rounded_rectangle(
+                (
+                    x_offset + label_x,
+                    label_y,
+                    x_offset + label_x + label_width,
+                    label_y + label_height,
+                ),
+                radius=4,
+                fill=(18, 20, 24),
+            )
+            draw.text(
+                (x_offset + label_x + 5, label_y + 4),
+                label,
+                fill=color,
+                font=font,
+            )
+
     return canvas
 
 

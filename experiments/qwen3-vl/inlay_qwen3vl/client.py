@@ -13,8 +13,10 @@ from .geometry import box_1000_to_pixels
 from .protocol import CandidateSelection, parse_candidate_selection
 from .vision import (
     RectangleCandidate,
+    draw_boundary_options_overview,
     draw_candidate_overview,
     draw_sharpness_overview,
+    rank_sharpness_boundaries,
 )
 
 
@@ -28,11 +30,14 @@ copy of the same photograph, so similar colors and content do NOT mean it is
 part of the foreground. The important distinction is sharp detail inside the
 photo versus soft, out-of-focus detail outside it.
 
-You receive three images:
+You receive four images:
 1. The untouched screenshot.
 2. The screenshot with numbered OpenCV rectangle proposals.
 3. A sharpness map with the same numbered proposals. Brighter areas contain
    more fine detail and are sharper; darker areas are smoother and blurrier.
+4. A four-panel boundary atlas. Each panel isolates ONE edge direction and
+   draws only the possible positions for that edge. Labels show the candidate
+   IDs and pixel coordinates. Use this atlas to map each boundary to its ID.
 
 Find the four outer boundaries of the sharp foreground photo. Inspect each
 boundary independently. A correct boundary follows the transition from the
@@ -42,10 +47,13 @@ complete photo panel, including its rounded corners. Do not select a person or
 object inside the photograph.
 
 Return four candidate IDs, not one rectangle ID:
-- left_candidate_id: use the LEFT coordinate from that candidate.
-- top_candidate_id: use the TOP coordinate from that candidate.
-- right_candidate_id: use the RIGHT coordinate from that candidate.
-- bottom_candidate_id: use the BOTTOM coordinate from that candidate.
+- left_candidate_id: choose a vertical line in the LEFT EDGE panel.
+- top_candidate_id: choose a horizontal line in the TOP EDGE panel.
+- right_candidate_id: choose a vertical line in the RIGHT EDGE panel.
+- bottom_candidate_id: choose a horizontal line in the BOTTOM EDGE panel.
+
+The ID labels are repeated in the matching edge panel. Do not copy an ID from
+one panel to another unless that ID is also shown in the other panel.
 
 The four IDs may be different. Python will combine the four independently
 selected edges into one rectangle. Compare the original image with the
@@ -87,6 +95,11 @@ class LMStudioVisionClient:
 
         overview = draw_candidate_overview(image, candidates)
         sharpness_overview = draw_sharpness_overview(image, candidates)
+        boundary_rankings = rank_sharpness_boundaries(image, candidates)
+        boundary_overview = draw_boundary_options_overview(
+            image,
+            boundary_rankings,
+        )
         candidate_lines = []
         for index, candidate in enumerate(candidates, start=1):
             left, top, right, bottom = box_1000_to_pixels(
@@ -100,15 +113,35 @@ class LMStudioVisionClient:
                 f"source={candidate.source}"
             )
 
+        boundary_lines = []
+        coordinate_names = {
+            "left": "x",
+            "top": "y",
+            "right": "x",
+            "bottom": "y",
+        }
+        for side in ("left", "top", "right", "bottom"):
+            choices = ", ".join(
+                f"ID {int(option['candidate_id'])}={int(option['coordinate'])}px"
+                for option in boundary_rankings[side]
+            )
+            boundary_lines.append(
+                f"{side.upper()} ({coordinate_names[side]} coordinates): {choices}"
+            )
+
         instruction = (
             f"Original screenshot dimensions: {image.width} x {image.height} pixels. "
-            "Choose the left, top, right, and bottom boundaries independently. "
-            "For each field, return the ID of the candidate that supplies that "
-            "specific edge coordinate. Candidate details in full-resolution pixels:\n"
+            "Choose each boundary independently, using the matching panel in the "
+            "fourth image. The sharp photo is the high-detail region; the surrounding "
+            "blurred enlargement is outside the crop. Candidate rectangles and their "
+            "coordinates:\n"
             + "\n".join(candidate_lines)
-            + "\nThe second and third images show these same candidates with matching "
-            "numeric labels. The third image is the sharpness map: brighter means "
-            "sharper detail; darker means blurrier. The four IDs do not need to match."
+            + "\nIndependent edge choices and their coordinates:\n"
+            + "\n".join(boundary_lines)
+            + "\nImage 2 shows complete rectangles. Image 3 is the sharpness map. "
+            "Image 4 isolates left, right, top, and bottom choices into separate "
+            "panels. Select the line at the sharp-to-blurry transition in each panel. "
+            "Use the exact ID printed next to that line. The four IDs may differ."
         )
 
         request_input: list[dict[str, Any]] = [
@@ -118,6 +151,10 @@ class LMStudioVisionClient:
             {
                 "type": "image",
                 "data_url": self._encode_image(self._resize(sharpness_overview)),
+            },
+            {
+                "type": "image",
+                "data_url": self._encode_image(self._resize(boundary_overview)),
             },
         ]
 

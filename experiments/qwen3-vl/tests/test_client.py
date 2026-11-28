@@ -53,9 +53,11 @@ def test_sends_original_and_numbered_opencv_candidates(post):
     assert payload["store"] is False
     assert "sharpness map" in payload["system_prompt"]
     assert "independently" in payload["system_prompt"]
-    assert len(request_input) == 4
+    assert len(request_input) == 5
     assert request_input[0]["type"] == "text"
     assert all(item["type"] == "image" for item in request_input[1:])
+    assert "four-panel boundary atlas" in payload["system_prompt"]
+    assert "Independent edge choices" in request_input[0]["content"]
     assert payload["model"] == "qwen-test"
 
 

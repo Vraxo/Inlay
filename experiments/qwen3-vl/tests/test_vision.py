@@ -1,10 +1,13 @@
 from PIL import Image, ImageDraw, ImageFilter
 
-from inlay_qwen3vl.geometry import box_1000_to_pixels
+from inlay_qwen3vl.geometry import box_1000_to_pixels, pixels_to_box_1000
 from inlay_qwen3vl.vision import (
+    draw_boundary_options_overview,
     draw_sharpness_overview,
     generate_candidates,
+    rank_sharpness_boundaries,
     refine_rectangle,
+    RectangleCandidate,
 )
 
 
@@ -106,3 +109,49 @@ def test_sharpness_overview_marks_candidate_boundaries():
     sharp_photo_detail = sum(overview.getpixel((300, 500)))
     blurred_surround_detail = sum(overview.getpixel((300, 100)))
     assert sharp_photo_detail > blurred_surround_detail
+
+
+
+def test_sharpness_contrast_ranks_the_actual_photo_edges_first():
+    image = make_screenshot()
+    candidates = [
+        RectangleCandidate(
+            pixels_to_box_1000((60, 60, 540, 940), *image.size),
+            0.70, 0.5, 0.2, 0.8, "test",
+        ),
+        RectangleCandidate(
+            pixels_to_box_1000((60, 220, 540, 820), *image.size),
+            0.68, 0.5, 0.3, 0.8, "test",
+        ),
+        RectangleCandidate(
+            pixels_to_box_1000((150, 60, 450, 940), *image.size),
+            0.67, 0.5, 0.2, 0.8, "test",
+        ),
+        RectangleCandidate(
+            pixels_to_box_1000((60, 300, 540, 820), *image.size),
+            0.66, 0.5, 0.3, 0.8, "test",
+        ),
+        RectangleCandidate(
+            pixels_to_box_1000((60, 220, 450, 820), *image.size),
+            0.65, 0.5, 0.3, 0.8, "test",
+        ),
+    ]
+
+    rankings = rank_sharpness_boundaries(image, candidates)
+
+    assert rankings["left"][0]["coordinate"] == 60
+    assert rankings["top"][0]["coordinate"] == 220
+    assert rankings["right"][0]["coordinate"] == 540
+    assert rankings["bottom"][0]["coordinate"] == 820
+
+
+def test_boundary_options_overview_separates_the_four_edge_directions():
+    image = make_screenshot()
+    candidates = generate_candidates(image)
+    rankings = rank_sharpness_boundaries(image, candidates)
+
+    overview = draw_boundary_options_overview(image, rankings)
+
+    assert overview.mode == "RGB"
+    assert overview.width >= image.width
+    assert overview.height > image.height

@@ -56,12 +56,17 @@ def test_runs_opencv_proposals_qwen_selection_and_edge_refinement(tmp_path: Path
     assert result["pipeline"].startswith("OpenCV edge/contour proposals")
     assert result["candidate_count"] >= 2
     assert result["selected_candidate_id"] == 1
-    assert result["selection_method"] in {"opencv_high_confidence", "qwen_semantic"}
+    assert result["selection_method"] in {
+        "opencv_high_confidence",
+        "qwen_semantic",
+        "sharpness_boundary_confidence",
+    }
     assert result["refinement"]["method"] == "local Sobel edge snapping"
     assert (output / "candidate.png").is_file()
     assert (output / "overlay.png").is_file()
     assert (output / "proposals.png").is_file()
     assert (output / "sharpness.png").is_file()
+    assert (output / "boundary_options.png").is_file()
     assert (output / "report.json").is_file()
     assert not (output / "crop.png").exists()
 
@@ -156,3 +161,69 @@ def test_independent_boundaries_can_create_a_rectangle_not_in_candidates():
     assert selected_box == (31, 289, 969, 711)
     assert matching_id is None
     assert boundary_ids == {"left": 1, "top": 2, "right": 1, "bottom": 2}
+
+
+
+def test_sharpness_contrast_selects_all_four_boundaries_without_qwen():
+    from inlay_qwen3vl.geometry import pixels_to_box_1000
+
+    image = Image.new("RGB", (600, 1000), (20, 24, 28))
+    panel = Image.new("RGB", (480, 600), (110, 140, 170))
+    pixels = panel.load()
+    for y in range(panel.height):
+        for x in range(panel.width):
+            tone = (x * 3 + y * 2) % 35
+            pixels[x, y] = (90 + tone, 125 + tone, 155 + tone)
+    mask = Image.new("L", panel.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        (0, 0, 479, 599),
+        radius=40,
+        fill=255,
+    )
+    image.paste(panel.filter(ImageFilter.GaussianBlur(0.5)), (60, 220), mask)
+
+    boxes = (
+        (60, 60, 540, 940),
+        (60, 220, 540, 820),
+        (150, 60, 450, 940),
+        (60, 300, 540, 820),
+        (60, 220, 450, 820),
+    )
+    candidates = [
+        RectangleCandidate(
+            pixels_to_box_1000(box, *image.size),
+            score,
+            0.5,
+            0.3,
+            0.8,
+            "test",
+        )
+        for box, score in zip(
+            boxes,
+            (0.70, 0.68, 0.67, 0.66, 0.65),
+            strict=True,
+        )
+    ]
+
+    class ModelMustNotBeCalled:
+        def select_candidate(self, image, candidates):
+            raise AssertionError("Clear sharpness contrast should not need Qwen.")
+
+    selection, method, metrics = _select_candidate(
+        image,
+        candidates,
+        ModelMustNotBeCalled(),
+    )
+    selected_box, matching_id, boundary_ids = _resolve_selected_box(
+        selection,
+        candidates,
+    )
+
+    assert method == "sharpness_boundary_confidence"
+    assert selected_box == candidates[1].box
+    assert matching_id == 2
+    assert boundary_ids == {"left": 1, "top": 2, "right": 1, "bottom": 2}
+    assert metrics["boundary_evidence"]["left"]["coordinate"] == 60
+    assert metrics["boundary_evidence"]["top"]["coordinate"] == 220
+    assert metrics["boundary_evidence"]["right"]["coordinate"] == 540
+    assert metrics["boundary_evidence"]["bottom"]["coordinate"] == 820

@@ -11,12 +11,13 @@ It is deliberately separate from Inlay's .NET detector and the SAM 3 experiment.
 3. Load the original screenshot with Pillow and correct its EXIF orientation.
 4. OpenCV computes horizontal and vertical Sobel gradients, builds long-edge projection profiles, and finds large closed-contour rectangles.
 5. The detector combines the strongest coherent edge pair with other high-scoring geometric candidates. Candidate scoring considers four-edge support, projection strength, area, and centrality.
-6. If the best proposal has strong support on all four sides and a clear score lead, OpenCV selects it directly. The initial conservative gate requires score >= 0.80, weakest-side support >= 0.55, and a margin >= 0.06 over the next proposal.
-7. Otherwise, Python creates two diagnostic images: numbered candidate rectangles and a sharpness map. The map uses local Laplacian detail energy; brighter areas are sharper and darker areas are blurrier. The original, candidate overview, and sharpness map are sent to Qwen through LM Studio's native `/api/v1/chat` endpoint.
-8. Qwen selects the left, top, right, and bottom boundaries independently. Each response field references a candidate ID whose corresponding edge coordinate should be used. The four IDs may differ, allowing Python to combine boundaries from different proposals. Qwen does not generate or estimate coordinates.
-9. Python validates the combined rectangle, maps it back to original pixels, performs local Sobel edge snapping, and creates the crop and overlay.
+6. Python measures local Laplacian detail energy immediately inside and outside every proposed edge. A valid photo boundary should have more sharp detail on its inside and less detail on its outside. It ranks the left, top, right, and bottom coordinates independently, using the shared interior of the proposals as the sampling region.
+7. If all four edge choices have strong inside-versus-outside contrast, sufficient detail inside, and a clear lead over alternatives, Python combines them directly. This avoids a model call when the sharp/blurred transition is unambiguous. The initial conservative gates require a combined contrast score >= 0.08, inside detail >= 10% of the image reference level, and a margin >= 0.035 over the next edge position.
+8. Otherwise, Python creates three diagnostic images: numbered candidate rectangles, a sharpness map, and a four-panel boundary atlas. The map uses local Laplacian detail energy; brighter areas are sharper and darker areas are blurrier. Each atlas panel shows only one edge direction and labels the possible positions with candidate IDs and pixel coordinates. The original, candidate overview, sharpness map, and boundary atlas are sent to Qwen through LM Studio's native `/api/v1/chat` endpoint.
+9. Qwen selects the left, top, right, and bottom boundaries independently, using the matching panel in the atlas. Each response field references a candidate ID whose corresponding edge coordinate should be used. The four IDs may differ, allowing Python to combine boundaries from different proposals. Qwen does not generate or estimate coordinates.
+10. If sharpness evidence is inconclusive, the existing conservative four-edge OpenCV rectangle gate remains available before Qwen. Python validates the combined rectangle, maps it back to original pixels, performs local Sobel edge snapping, and creates the crop and overlay.
 
-The model is used as a visual tie-breaker when geometric evidence is ambiguous. It cannot override a high-confidence OpenCV proposal. Rectangle geometry, boundary composition, validation, refinement, the sharpness map, and pixel extraction are performed by Python/OpenCV/Pillow. The thresholds are conservative starting values and should be calibrated against labelled screenshots before being treated as general confidence probabilities.
+Qwen is now a fallback for ambiguous visual cases rather than the first line of defense. Rectangle geometry, sharpness scoring, boundary composition, validation, refinement, diagnostic images, and pixel extraction are performed by Python/OpenCV/Pillow. These thresholds are initial heuristics, not trained confidence probabilities; they should be calibrated against labelled screenshots before being treated as general guarantees.
 
 ## Requirements
 
@@ -71,7 +72,8 @@ By default, the experiment creates a directory named `<image-name>.qwen3vl` besi
 - `overlay.png` — selected rectangle drawn over the original screenshot
 - `proposals.png` — all numbered OpenCV candidates shown to Qwen
 - `sharpness.png` — local detail-energy map; brighter areas are sharper and darker areas are blurrier
-- `report.json` — candidate geometry scores, independently selected boundary IDs, selection method and confidence metrics, refinement offsets, and output paths
+- `boundary_options.png` — four-panel view of the alternative left, right, top, and bottom edge positions
+- `report.json` — candidate geometry scores, boundary contrast evidence, independently selected boundary IDs, selection method, refinement offsets, and output paths
 
 The experiment deliberately does not create `crop.png` or mark a result accepted automatically. Inspect `overlay.png` and `candidate.png` before using the result. A good computer-vision score or model selection is not an accuracy guarantee.
 
