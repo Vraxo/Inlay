@@ -7,6 +7,7 @@ from inlay_qwen3vl.vision import (
     generate_candidates,
     rank_sharpness_boundaries,
     refine_rectangle,
+    RectangleCandidate,
 )
 
 
